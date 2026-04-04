@@ -1,0 +1,58 @@
+###############################################################################
+# autobot-autonomy  —  docker compose
+# Run on Raspberry Pi 5 with Raspberry OS
+###############################################################################
+
+services:
+  autobot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+    container_name: autobot
+    hostname: autobot
+    privileged: false       # avoid full privileged; grant only what's needed
+
+    # ---- Networking --------------------------------------------------------
+    network_mode: host      # share host network (DDS discovery, SSH, etc.)
+    ipc: host               # fast shared-memory transport for ROS 2
+
+    # ---- Hardware devices --------------------------------------------------
+    # NOTE: RPi 5 (RP1 chip) renumbers peripherals vs RPi 4
+    devices:
+      - /dev/gpiochip0:/dev/gpiochip0   # GPIO  (pinctrl-rp1 — 40-pin header, 54 lines)
+      - /dev/i2c-13:/dev/i2c-13         # I2C bus (RP1)
+      - /dev/i2c-14:/dev/i2c-14         # I2C bus (RP1 — second bus)
+      - /dev/spidev10.0:/dev/spidev10.0 # SPI (RP1)
+      - /dev/ttyAMA10:/dev/ttyAMA10     # UART (RP1)
+      - /dev/serial0:/dev/serial0       # UART symlink
+      - /dev/video0:/dev/video0         # Camera (v4l2)
+
+    # ---- Capabilities (least privilege) ------------------------------------
+    cap_add:
+      - SYS_RAWIO          # direct I/O (GPIO, SPI)
+
+    # ---- Volumes -----------------------------------------------------------
+    volumes:
+      # Mount the source code into the container workspace
+      - ./src:/ros2_ws/src
+      # Persist colcon build/install/log artifacts
+      - autobot_build:/ros2_ws/build
+      - autobot_install:/ros2_ws/install
+      - autobot_log:/ros2_ws/log
+
+    # ---- Environment -------------------------------------------------------
+    environment:
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_LOCALHOST_ONLY=0
+
+    # ---- Runtime -----------------------------------------------------------
+    stdin_open: true   # docker attach / interactive
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  autobot_build:
+  autobot_install:
+  autobot_log:

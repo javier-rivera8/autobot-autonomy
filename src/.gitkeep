@@ -1,0 +1,7 @@
+# This directory is the ROS 2 workspace source root.
+# Create your packages here, for example:
+#
+#   cd src/
+#   ros2 pkg create --build-type ament_cmake autobot_drivers
+#   ros2 pkg create --build-type ament_python autobot_bringup
+#
