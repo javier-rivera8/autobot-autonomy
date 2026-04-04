@@ -79,15 +79,16 @@ source install/setup.bash
 # Listar chips GPIO
 gpiodetect
 
-# Listar pines del chip principal (40-pin header en RPi 5)
-gpioinfo gpiochip4
+# Listar pines del chip principal (40-pin header en RPi 5, 54 lines)
+gpioinfo gpiochip0
 ```
 
 ### Test rápido de I2C
 
 ```bash
-# Escanear dispositivos en bus 1
-i2cdetect -y 1
+# Escanear dispositivos en los buses RP1
+i2cdetect -y 13
+i2cdetect -y 14
 ```
 
 ## Notas

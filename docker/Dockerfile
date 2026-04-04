@@ -61,6 +61,11 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     spidev \
     pyserial
 
+# ---- Auto-source ROS 2 for every interactive bash session ------------------
+# This ensures ros2 commands work whether you exec into the container or
+# the entrypoint starts it.
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /etc/bash.bashrc
+
 # ============================================================================
 # Dev stage — workspace and entrypoint
 # ============================================================================
