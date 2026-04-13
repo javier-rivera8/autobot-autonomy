@@ -63,15 +63,36 @@ source install/setup.bash
 
 ## Acceso al hardware desde el contenedor
 
-> **RPi 5 nota:** el chip RP1 renumera todos los periféricos respecto a RPi 4.
+> **RPi 5 nota:** el chip RP1 renumera los buses internos, pero el I2C del header (GPIO2/GPIO3) sigue siendo `/dev/i2c-1`.
 
 | Periférico | Device en RPi 5      | Librería / herramienta          |
 |------------|----------------------|---------------------------------|
 | GPIO       | `/dev/gpiochip0`     | `libgpiod` / `python3-libgpiod` |
-| I2C        | `/dev/i2c-13`, `/dev/i2c-14` | `smbus2` / `i2c-tools`  |
+| I2C (header)| `/dev/i2c-1` → MCU `0x2b` | `smbus2` / `i2c-tools`   |
 | SPI        | `/dev/spidev10.0`    | `spidev` (Python)               |
 | UART       | `/dev/ttyAMA10`, `/dev/serial0` | `pyserial`           |
 | Cámara     | `/dev/video0`        | `v4l2` / `ros2 v4l2_camera`     |
+
+### MCU coprocessor — protocolo I2C
+
+Address: `0x2b` en `/dev/i2c-1`
+
+| Registro | Operación | Datos |
+|----------|-----------|-------|
+| `0x01` | Mover un motor | `[motor_id, dir, speed]` — dir: `1`=adelante `0`=atrás, speed: `0-100` |
+| `0x02` | Stop | write_byte `0x00` |
+| `0x03` | Servo | `[id, angle]` — angle: `0-180` |
+| `0x06` | Buzzer | TBD |
+| `0x08` | RGB LEDs | TBD |
+
+Motor IDs (verificados por hardware probing):
+
+| Motor ID | Posición física |
+|----------|-----------------|
+| `0` | Front-Left (M4) |
+| `1` | Rear-Left  (M1) |
+| `2` | Front-Right (M2) |
+| `3` | Rear-Right  (M3) |
 
 ### Test rápido de GPIO (dentro del container)
 
@@ -86,9 +107,16 @@ gpioinfo gpiochip0
 ### Test rápido de I2C
 
 ```bash
-# Escanear dispositivos en los buses RP1
-i2cdetect -y 13
-i2cdetect -y 14
+# Escanear el bus del header (GPIO2/GPIO3)
+sudo i2cdetect -y -r 1
+# Esperado: 0x2b → MCU coprocessor
+
+# Verificar motores (robot levantado)
+# [motor_id, dir=adelante, speed=60]
+sudo i2cset -y 1 0x2b 0x01 0 1 60 i  # FL
+sudo i2cset -y 1 0x2b 0x01 2 1 60 i  # FR
+sudo i2cset -y 1 0x2b 0x01 1 1 60 i  # RL
+sudo i2cset -y 1 0x2b 0x01 3 1 60 i  # RR
 ```
 
 ## Notas

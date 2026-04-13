@@ -21,8 +21,7 @@ services:
     # NOTE: RPi 5 (RP1 chip) renumbers peripherals vs RPi 4
     devices:
       - /dev/gpiochip0:/dev/gpiochip0   # GPIO  (pinctrl-rp1 — 40-pin header, 54 lines)
-      - /dev/i2c-13:/dev/i2c-13         # I2C bus (RP1)
-      - /dev/i2c-14:/dev/i2c-14         # I2C bus (RP1 — second bus)
+      - /dev/i2c-1:/dev/i2c-1           # I2C1 — header GPIO2/GPIO3 → MCU coprocessor
       - /dev/spidev10.0:/dev/spidev10.0 # SPI (RP1)
       - /dev/ttyAMA10:/dev/ttyAMA10     # UART (RP1)
       - /dev/serial0:/dev/serial0       # UART symlink
