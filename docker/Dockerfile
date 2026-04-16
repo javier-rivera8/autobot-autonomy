@@ -59,8 +59,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip3 install --no-cache-dir --break-system-packages \
     smbus2 \
     spidev \
-    pyserial \
-    ultralytics
+    pyserial
+
+# PyTorch CPU-only for aarch64 (skip ~2 GB of useless CUDA/NVIDIA deps)
+# Then ultralytics on top — it sees torch already satisfied.
+RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed numpy \
+    && pip3 install --no-cache-dir --break-system-packages \
+       --extra-index-url https://download.pytorch.org/whl/cpu \
+       torch torchvision \
+    && pip3 install --no-cache-dir --break-system-packages --no-deps \
+       ultralytics \
+    && pip3 install --no-cache-dir --break-system-packages \
+       ultralytics-thop opencv-python matplotlib pillow pyyaml requests tqdm psutil py-cpuinfo pandas seaborn
 
 # ---- Auto-source ROS 2 for every interactive bash session ------------------
 # This ensures ros2 commands work whether you exec into the container or
