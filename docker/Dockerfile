@@ -59,7 +59,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip3 install --no-cache-dir --break-system-packages \
     smbus2 \
     spidev \
-    pyserial
+    pyserial \
+    ultralytics
 
 # ---- Auto-source ROS 2 for every interactive bash session ------------------
 # This ensures ros2 commands work whether you exec into the container or

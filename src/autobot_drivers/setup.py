@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'motor_driver = autobot_drivers.motor_driver_node:main',
+            'bottle_detector = autobot_drivers.bottle_detector_node:main',
         ],
     },
 )
