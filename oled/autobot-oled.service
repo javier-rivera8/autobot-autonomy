@@ -1,0 +1,13 @@
+[Unit]
+Description=Autobot OLED Stats Display
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/autobot/oled_stats.py
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
