@@ -33,8 +33,11 @@ Controls:
     Ctrl-C  or  X
 """
 
+import select
 import sys
 import termios
+import threading
+import time
 import tty
 
 import rclpy
@@ -50,7 +53,7 @@ _HELP = """
 ╔══════════════════════════════════════════════════════════╗
 ║                AUTOBOT KEYBOARD TELEOP                  ║
 ╠══════════════════════════════════════════════════════════╣
-║  MOVEMENT          SERVO            LED BAR             ║
+║  MOVEMENT (hold)   SERVO            LED BAR             ║
 ║  W / ↑  Fwd        I  Tilt up       1-7 Color preset   ║
 ║  S / ↓  Back       K  Tilt down     0   LEDs off       ║
 ║  A / ←  Turn L     J  Pan left      R/G  Red ±         ║
@@ -64,17 +67,26 @@ _HELP = """
 """
 
 
-def _getch() -> str:
-    """Read a single keypress from stdin (raw mode)."""
+def _getch(timeout: float = 0.15) -> str:
+    """Read a single keypress with timeout. Returns '' on timeout."""
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
+        rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+        if not rlist:
+            return ''
         ch = sys.stdin.read(1)
         # Handle escape sequences (arrow keys)
         if ch == _ARROW_PREFIX:
+            rlist2, _, _ = select.select([sys.stdin], [], [], 0.05)
+            if not rlist2:
+                return ''
             ch2 = sys.stdin.read(1)
             if ch2 == '[':
+                rlist3, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if not rlist3:
+                    return ''
                 ch3 = sys.stdin.read(1)
                 return {
                     'A': 'UP', 'B': 'DOWN',
@@ -117,6 +129,7 @@ class TeleopNode(Node):
         self._mcu.set_servo(2, self._tilt_angle)
 
         self.get_logger().info('teleop node ready')
+        self._moving = False  # track whether motors are currently running
 
     # ------------------------------------------------------------------
     # Motor helpers
@@ -140,7 +153,13 @@ class TeleopNode(Node):
         try:
             while True:
                 key = _getch()
+
+                # No key within timeout → stop motors if moving
                 if not key:
+                    if self._moving:
+                        self._stop()
+                        self._moving = False
+                        self._status('STOP')
                     continue
 
                 k = key.lower() if len(key) == 1 else key
@@ -148,24 +167,31 @@ class TeleopNode(Node):
                 # ----- Movement -----------------------------------------
                 if k in ('w', 'UP'):
                     self._drive(self._speed, self._speed)
+                    self._moving = True
                     self._status('Forward')
                 elif k in ('s', 'DOWN'):
                     self._drive(-self._speed, -self._speed)
+                    self._moving = True
                     self._status('Backward')
                 elif k in ('a', 'LEFT'):
                     self._drive(-self._speed, self._speed)
+                    self._moving = True
                     self._status('Turn left')
                 elif k in ('d', 'RIGHT'):
                     self._drive(self._speed, -self._speed)
+                    self._moving = True
                     self._status('Turn right')
                 elif k == 'q':
                     self._drive(self._speed // 2, self._speed)
+                    self._moving = True
                     self._status('Forward-left')
                 elif k == 'e':
                     self._drive(self._speed, self._speed // 2)
+                    self._moving = True
                     self._status('Forward-right')
                 elif k == ' ':
                     self._stop()
+                    self._moving = False
                     self._status('STOP')
 
                 # ----- Speed -------------------------------------------
