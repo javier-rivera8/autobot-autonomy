@@ -26,6 +26,7 @@ services:
       - /dev/ttyAMA10:/dev/ttyAMA10     # UART (RP1)
       - /dev/serial0:/dev/serial0       # UART symlink
       - /dev/video0:/dev/video0         # Camera (v4l2)
+      - /dev/input:/dev/input           # Joystick / gamepad (Xbox controller)
 
     # ---- Capabilities (least privilege) ------------------------------------
     cap_add:
