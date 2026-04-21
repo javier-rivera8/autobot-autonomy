@@ -54,6 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-cv-bridge \
     ros-${ROS_DISTRO}-diagnostic-updater \
     ros-${ROS_DISTRO}-joy \
+    ros-${ROS_DISTRO}-web-video-server \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Python packages (for driver development) -----------------------------
@@ -73,10 +74,10 @@ RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed "nump
     && pip3 install --no-cache-dir --break-system-packages \
        ultralytics-thop matplotlib pillow pyyaml requests tqdm psutil py-cpuinfo pandas seaborn
 
-# ---- Auto-source ROS 2 for every interactive bash session ------------------
-# This ensures ros2 commands work whether you exec into the container or
-# the entrypoint starts it.
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /etc/bash.bashrc
+# ---- Auto-source ROS 2 + workspace for every interactive bash session ------
+# Applies to `docker exec -it autobot bash` without needing to source manually.
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /etc/bash.bashrc \
+ && echo '[[ -f /ros2_ws/install/setup.bash ]] && source /ros2_ws/install/setup.bash' >> /etc/bash.bashrc
 
 # ============================================================================
 # Dev stage — workspace and entrypoint

@@ -13,6 +13,9 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>joy</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>v4l2_camera</exec_depend>
+  <exec_depend>web_video_server</exec_depend>
 
   <buildtool_depend>ament_python</buildtool_depend>
 
