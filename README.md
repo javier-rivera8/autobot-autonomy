@@ -125,5 +125,10 @@ sudo i2cset -y 1 0x2b 0x01 3 1 60 i  # RR
 - Los artefactos de build (`build/`, `install/`, `log/`) se persisten en Docker volumes para no recompilar todo cada vez.
 - El código fuente en `src/` se monta como bind mount — los cambios se reflejan inmediatamente dentro del contenedor.
 
-WEBSERVER
+## WEBSERVER
 http://192.168.0.52:8080/stream?topic=/image_raw
+
+http://192.168.0.52:8080/stream?topic=/image_annotated
+
+## CAMBIOS EN EL DOCKER
+docker compose up --build -d
