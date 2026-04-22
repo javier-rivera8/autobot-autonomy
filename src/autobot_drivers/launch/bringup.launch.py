@@ -34,4 +34,12 @@ def generate_launch_description():
             output='screen',
         ),
 
+        # ---- Bottle detector (publishes /image_annotated with bboxes) ------
+        Node(
+            package='autobot_drivers',
+            executable='bottle_detector',
+            name='bottle_detector',
+            output='screen',
+        ),
+
     ])

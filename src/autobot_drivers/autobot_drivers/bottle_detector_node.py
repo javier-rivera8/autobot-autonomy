@@ -13,10 +13,12 @@ Requires:
   1.  v4l2_camera_node running and publishing /image_raw
 
 Topics:
-  Subscribed : /image_raw       (sensor_msgs/Image)
-  Published  : /bottle_detected (std_msgs/Bool)
+  Subscribed : /image_raw         (sensor_msgs/Image)
+  Published  : /bottle_detected   (std_msgs/Bool)
+               /image_annotated   (sensor_msgs/Image)  ← bounding boxes
 """
 
+import cv2
 from ultralytics import YOLO
 
 import rclpy
@@ -38,7 +40,7 @@ class BottleDetectorNode(Node):
 
         # ----- Parameters ---------------------------------------------------
         self.declare_parameter('model', 'yolov8n.pt')
-        self.declare_parameter('confidence', 0.45)
+        self.declare_parameter('confidence', 0.40)
         self.declare_parameter('img_size', 320)
 
         model_name = self.get_parameter('model').value
@@ -67,9 +69,11 @@ class BottleDetectorNode(Node):
             qos_profile_sensor_data)
 
         self._pub = self.create_publisher(Bool, '/bottle_detected', 10)
+        self._img_pub = self.create_publisher(Image, '/image_annotated', 10)
 
         self.get_logger().info('bottle_detector node ready  '
-                               f'(confidence ≥ {self._conf})')
+                               f'(confidence ≥ {self._conf})'
+                               '  →  stream: /image_annotated')
 
     # ------------------------------------------------------------------
     def _image_cb(self, msg: Image) -> None:
@@ -87,6 +91,17 @@ class BottleDetectorNode(Node):
                 if conf > best_conf:
                     best_conf = conf
                     found = True
+                # Draw bounding box on frame
+                x1, y1, x2, y2 = (int(v) for v in box.xyxy[0])
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, f'bottle {conf:.0%}',
+                            (x1, max(y1 - 8, 0)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        # Publish annotated image (always, so the stream stays active)
+        ann_msg = self._bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+        ann_msg.header = msg.header
+        self._img_pub.publish(ann_msg)
 
         # Publish detection flag
         det_msg = Bool()
