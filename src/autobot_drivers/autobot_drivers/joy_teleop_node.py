@@ -64,7 +64,7 @@ class JoyTeleopNode(Node):
 
     DEADZONE = 0.12
     SERVO_DEADZONE = 0.30   # higher threshold to ignore resting-axis drift
-    SERVO_RATE = 2.0     # degrees per joy callback at full deflection
+    SERVO_RATE = 5.0     # max degrees per joy callback (rate-limited absolute)
     DPAD_SERVO_STEP = 5  # degrees per d-pad press
 
     def __init__(self):
@@ -140,15 +140,15 @@ class JoyTeleopNode(Node):
             self._mcu.set_motor(YahboomMCU.MOTOR_FR, right)
             self._mcu.set_motor(YahboomMCU.MOTOR_RR, right)
 
-        # --- Servos (right stick = absolute, d-pad = incremental nudge) --
+        # --- Servos (right stick = incremental, d-pad = nudge) -----------
         rs_x = axes[self.AXIS_RIGHT_X]
         rs_y = -axes[self.AXIS_RIGHT_Y]
 
-        # Absolute mode: stick maps directly to angle so drift never accumulates.
+        # Rate mode: stick deflection increments angle; servo holds when released.
         if abs(rs_x) > self.SERVO_DEADZONE:
-            self._pan_angle = self.PAN_MIN + (rs_x + 1.0) / 2.0 * (self.PAN_MAX - self.PAN_MIN)
+            self._pan_angle += rs_x * self.SERVO_RATE
         if abs(rs_y) > self.SERVO_DEADZONE:
-            self._tilt_angle = self.TILT_MIN + (rs_y + 1.0) / 2.0 * (self.TILT_MAX - self.TILT_MIN)
+            self._tilt_angle += rs_y * self.SERVO_RATE
 
         # D-pad nudge
         dpad_x = axes[self.AXIS_DPAD_X]
