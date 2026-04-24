@@ -51,8 +51,8 @@ class JoyTeleopNode(Node):
     AXIS_LEFT_X   = 0   # left stick horizontal  (-1 left, +1 right)
     AXIS_LEFT_Y   = 1   # left stick vertical    (-1 down, +1 up ... inverted)
     AXIS_LT       = 2   # left trigger   (+1 released, -1 fully pressed)
-    AXIS_RIGHT_X  = 3   # right stick horizontal
-    AXIS_RIGHT_Y  = 4   # right stick vertical
+    AXIS_RIGHT_X  = 3   # right stick horizontal (Xbox)
+    AXIS_RIGHT_Y  = 4   # right stick vertical   (Xbox)
     AXIS_RT       = 5   # right trigger  (+1 released, -1 fully pressed)
     AXIS_DPAD_X   = 6   # d-pad horizontal (-1 left, +1 right)
     AXIS_DPAD_Y   = 7   # d-pad vertical   (-1 down, +1 up)
@@ -71,7 +71,13 @@ class JoyTeleopNode(Node):
         super().__init__('joy_teleop')
 
         self.declare_parameter('max_speed', 200)
+        self.declare_parameter('axis_right_x', self.AXIS_RIGHT_X)
+        self.declare_parameter('axis_right_y', self.AXIS_RIGHT_Y)
+        self.declare_parameter('axis_right_x_alt', 2)
         self._max_speed = self.get_parameter('max_speed').value
+        self._axis_right_x = int(self.get_parameter('axis_right_x').value)
+        self._axis_right_y = int(self.get_parameter('axis_right_y').value)
+        self._axis_right_x_alt = int(self.get_parameter('axis_right_x_alt').value)
 
         try:
             self._mcu = YahboomMCU()
@@ -92,14 +98,16 @@ class JoyTeleopNode(Node):
         self._sub = self.create_subscription(Joy, '/joy', self._joy_cb, 10)
 
         self.get_logger().info(
-            f'joy_teleop ready (max_speed={self._max_speed})')
+            f'joy_teleop ready (max_speed={self._max_speed}, '
+            f'right_x={self._axis_right_x}, right_y={self._axis_right_y}, '
+            f'right_x_alt={self._axis_right_x_alt})')
 
     # ------------------------------------------------------------------
     def _joy_cb(self, msg: Joy) -> None:
         axes = msg.axes
         buttons = msg.buttons
 
-        if len(axes) < 8 or len(buttons) < 8:
+        if len(buttons) < 8:
             return
 
         # --- Detect button edges (pressed this frame) ---
@@ -141,8 +149,14 @@ class JoyTeleopNode(Node):
             self._mcu.set_motor(YahboomMCU.MOTOR_RR, right)
 
         # --- Servos (right stick = incremental, d-pad = nudge) -----------
-        rs_x = axes[self.AXIS_RIGHT_X]
-        rs_y = -axes[self.AXIS_RIGHT_Y]
+        rs_x = self._read_axis(axes, self._axis_right_x)
+        # Fallback: some gamepads expose right-stick X on axis 2 instead of 3.
+        # Prefer configured axis, but auto-use alternate if it is clearly active.
+        rs_x_alt = self._read_axis(axes, self._axis_right_x_alt)
+        if abs(rs_x) <= self.SERVO_DEADZONE and abs(rs_x_alt) > self.SERVO_DEADZONE:
+            rs_x = rs_x_alt
+
+        rs_y = -self._read_axis(axes, self._axis_right_y)
 
         # Rate mode: stick deflection increments angle; servo holds when released.
         if abs(rs_x) > self.SERVO_DEADZONE:
@@ -151,8 +165,8 @@ class JoyTeleopNode(Node):
             self._tilt_angle += rs_y * self.SERVO_RATE
 
         # D-pad nudge
-        dpad_x = axes[self.AXIS_DPAD_X]
-        dpad_y = axes[self.AXIS_DPAD_Y]
+        dpad_x = self._read_axis(axes, self.AXIS_DPAD_X)
+        dpad_y = self._read_axis(axes, self.AXIS_DPAD_Y)
         if abs(dpad_x) > 0.5:
             self._pan_angle += self.DPAD_SERVO_STEP * (1 if dpad_x > 0 else -1)
         if abs(dpad_y) > 0.5:
@@ -198,6 +212,12 @@ class JoyTeleopNode(Node):
         elif self.BTN_BACK in pressed:
             self._mcu.led_off()
             self.get_logger().info('LEDs: OFF')
+
+    # ------------------------------------------------------------------
+    def _read_axis(self, axes, idx: int) -> float:
+        if idx < 0 or idx >= len(axes):
+            return 0.0
+        return axes[idx]
 
     # ------------------------------------------------------------------
     def destroy_node(self) -> None:
