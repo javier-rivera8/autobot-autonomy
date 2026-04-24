@@ -140,14 +140,15 @@ class JoyTeleopNode(Node):
             self._mcu.set_motor(YahboomMCU.MOTOR_FR, right)
             self._mcu.set_motor(YahboomMCU.MOTOR_RR, right)
 
-        # --- Servos (right stick + d-pad) ------------------------------
+        # --- Servos (right stick = absolute, d-pad = incremental nudge) --
         rs_x = axes[self.AXIS_RIGHT_X]
         rs_y = -axes[self.AXIS_RIGHT_Y]
 
+        # Absolute mode: stick maps directly to angle so drift never accumulates.
         if abs(rs_x) > self.SERVO_DEADZONE:
-            self._pan_angle += rs_x * self.SERVO_RATE
+            self._pan_angle = self.PAN_MIN + (rs_x + 1.0) / 2.0 * (self.PAN_MAX - self.PAN_MIN)
         if abs(rs_y) > self.SERVO_DEADZONE:
-            self._tilt_angle += rs_y * self.SERVO_RATE
+            self._tilt_angle = self.TILT_MIN + (rs_y + 1.0) / 2.0 * (self.TILT_MAX - self.TILT_MIN)
 
         # D-pad nudge
         dpad_x = axes[self.AXIS_DPAD_X]
