@@ -63,6 +63,7 @@ class JoyTeleopNode(Node):
     TILT_MIN, TILT_MAX = 0, 100
 
     DEADZONE = 0.12
+    SERVO_DEADZONE = 0.25   # higher threshold to ignore resting-axis drift
     SERVO_RATE = 2.0     # degrees per joy callback at full deflection
     DPAD_SERVO_STEP = 5  # degrees per d-pad press
 
@@ -140,9 +141,9 @@ class JoyTeleopNode(Node):
         rs_x = axes[self.AXIS_RIGHT_X]
         rs_y = -axes[self.AXIS_RIGHT_Y]
 
-        if abs(rs_x) > self.DEADZONE:
-            self._pan_angle -= rs_x * self.SERVO_RATE
-        if abs(rs_y) > self.DEADZONE:
+        if abs(rs_x) > self.SERVO_DEADZONE:
+            self._pan_angle += rs_x * self.SERVO_RATE
+        if abs(rs_y) > self.SERVO_DEADZONE:
             self._tilt_angle += rs_y * self.SERVO_RATE
 
         # D-pad nudge
