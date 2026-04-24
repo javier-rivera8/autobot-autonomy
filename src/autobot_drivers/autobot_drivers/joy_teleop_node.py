@@ -110,7 +110,7 @@ class JoyTeleopNode(Node):
         self._prev_buttons = list(buttons)
 
         # --- Motors (left stick + triggers for speed scaling) -----------
-        fwd   = -axes[self.AXIS_LEFT_Y]  # stick up = negative axis → positive fwd
+        fwd   =  axes[self.AXIS_LEFT_Y]   # stick up = positive axis → positive fwd
         turn  =  axes[self.AXIS_LEFT_X]  # stick left = +1
 
         # Apply deadzone
@@ -141,7 +141,7 @@ class JoyTeleopNode(Node):
         rs_y = -axes[self.AXIS_RIGHT_Y]
 
         if abs(rs_x) > self.DEADZONE:
-            self._pan_angle += rs_x * self.SERVO_RATE
+            self._pan_angle -= rs_x * self.SERVO_RATE
         if abs(rs_y) > self.DEADZONE:
             self._tilt_angle += rs_y * self.SERVO_RATE
 
