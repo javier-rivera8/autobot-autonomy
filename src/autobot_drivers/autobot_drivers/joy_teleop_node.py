@@ -58,7 +58,7 @@ class JoyTeleopNode(Node):
     AXIS_DPAD_Y   = 7   # d-pad vertical   (-1 down, +1 up)
 
     # Servo limits
-    PAN_CENTER, TILT_CENTER = 90, 50
+    PAN_CENTER, TILT_CENTER = 0, 50
     PAN_MIN, PAN_MAX = 0, 180
     TILT_MIN, TILT_MAX = 0, 100
 
