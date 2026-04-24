@@ -11,8 +11,8 @@ Controller mapping (Xbox layout):
   Left stick X          Turn left / right
   Right stick X         Pan servo
   Right stick Y         Tilt servo
-  RT (axis 5)           Speed boost (proportional)
-  LT (axis 2)           Reverse speed boost
+  RT (axis 5)           Strafe right (mecanum)
+  LT (axis 2)           Strafe left  (mecanum)
   A button (0)          Toggle buzzer
   B button (1)          LEDs red
   X button (2)          LEDs blue
@@ -58,12 +58,12 @@ class JoyTeleopNode(Node):
     AXIS_DPAD_Y   = 7   # d-pad vertical   (-1 down, +1 up)
 
     # Servo limits
-    PAN_CENTER, TILT_CENTER = 0, 50
+    PAN_CENTER, TILT_CENTER = 90, 50
     PAN_MIN, PAN_MAX = 0, 180
     TILT_MIN, TILT_MAX = 0, 100
 
     DEADZONE = 0.12
-    SERVO_DEADZONE = 0.25   # higher threshold to ignore resting-axis drift
+    SERVO_DEADZONE = 0.30   # higher threshold to ignore resting-axis drift
     SERVO_RATE = 2.0     # degrees per joy callback at full deflection
     DPAD_SERVO_STEP = 5  # degrees per d-pad press
 
@@ -110,32 +110,35 @@ class JoyTeleopNode(Node):
                     pressed.add(i)
         self._prev_buttons = list(buttons)
 
-        # --- Motors (left stick + triggers for speed scaling) -----------
-        fwd   =  axes[self.AXIS_LEFT_Y]   # stick up = positive axis → positive fwd
-        turn  =  axes[self.AXIS_LEFT_X]  # stick left = +1
+        # --- Motors (left stick = fwd/turn, triggers = strafe) ----------
+        # Triggers: axis +1 released → -1 fully pressed → remap to 0..1
+        lt_val = (1.0 - axes[self.AXIS_LT]) / 2.0  # 0=released  1=fully pressed
+        rt_val = (1.0 - axes[self.AXIS_RT]) / 2.0  # 0=released  1=fully pressed
+        strafe = rt_val - lt_val  # +1 = strafe right, -1 = strafe left
 
-        # Apply deadzone
-        if abs(fwd) < self.DEADZONE:
-            fwd = 0.0
-        if abs(turn) < self.DEADZONE:
-            turn = 0.0
+        if abs(strafe) > 0.1:
+            # Mecanum strafing: FL+/RR+ forward, RL-/FR- backward (strafe right)
+            # Invert sign to strafe left. If direction is wrong, swap MOTOR_FL/RR signs.
+            spd = max(-255, min(255, int(strafe * self._max_speed)))
+            self._mcu.set_motor(YahboomMCU.MOTOR_FL,  spd)
+            self._mcu.set_motor(YahboomMCU.MOTOR_RL, -spd)
+            self._mcu.set_motor(YahboomMCU.MOTOR_FR, -spd)
+            self._mcu.set_motor(YahboomMCU.MOTOR_RR,  spd)
+        else:
+            # Normal forward / turn (left stick)
+            fwd  =  axes[self.AXIS_LEFT_Y]
+            turn =  axes[self.AXIS_LEFT_X]
 
-        # RT gives speed boost: +1 (released) → -1 (pressed)
-        # Map to 0.0 (released) → 1.0 (pressed)
-        rt_boost = (1.0 - axes[self.AXIS_RT]) / 2.0
-        speed_factor = max(0.3, rt_boost)  # minimum 30% when stick is moved
+            if abs(fwd)  < self.DEADZONE: fwd  = 0.0
+            if abs(turn) < self.DEADZONE: turn = 0.0
 
-        left  = (fwd + turn) * self._max_speed * speed_factor
-        right = (fwd - turn) * self._max_speed * speed_factor
+            left  = max(-255, min(255, int((fwd + turn) * self._max_speed)))
+            right = max(-255, min(255, int((fwd - turn) * self._max_speed)))
 
-        # Clamp
-        left  = max(-255, min(255, int(left)))
-        right = max(-255, min(255, int(right)))
-
-        self._mcu.set_motor(YahboomMCU.MOTOR_FL, left)
-        self._mcu.set_motor(YahboomMCU.MOTOR_RL, left)
-        self._mcu.set_motor(YahboomMCU.MOTOR_FR, right)
-        self._mcu.set_motor(YahboomMCU.MOTOR_RR, right)
+            self._mcu.set_motor(YahboomMCU.MOTOR_FL, left)
+            self._mcu.set_motor(YahboomMCU.MOTOR_RL, left)
+            self._mcu.set_motor(YahboomMCU.MOTOR_FR, right)
+            self._mcu.set_motor(YahboomMCU.MOTOR_RR, right)
 
         # --- Servos (right stick + d-pad) ------------------------------
         rs_x = axes[self.AXIS_RIGHT_X]
