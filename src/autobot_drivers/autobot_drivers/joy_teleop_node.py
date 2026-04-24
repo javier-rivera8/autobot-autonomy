@@ -63,7 +63,7 @@ class JoyTeleopNode(Node):
     TILT_MIN, TILT_MAX = 0, 100
 
     DEADZONE = 0.12
-    SERVO_DEADZONE = 0.30   # higher threshold to ignore resting-axis drift
+    SERVO_DEADZONE = 0.20   # threshold to ignore resting-axis drift
     SERVO_RATE = 5.0     # max degrees per joy callback (rate-limited absolute)
     DPAD_SERVO_STEP = 5  # degrees per d-pad press
 
@@ -99,7 +99,13 @@ class JoyTeleopNode(Node):
         axes = msg.axes
         buttons = msg.buttons
 
-        if len(axes) < 8 or len(buttons) < 8:
+        # Need at least 6 axes (left stick + triggers + right stick).
+        # Dpad-as-axis (indices 6-7) is optional — some controllers expose dpad as buttons.
+        if len(axes) < 6 or len(buttons) < 8:
+            self.get_logger().warn(
+                f'Joy msg too small: {len(axes)} axes / {len(buttons)} buttons '
+                '(need ≥6 axes, ≥8 buttons) — skipping',
+                throttle_duration_sec=5.0)
             return
 
         # --- Detect button edges (pressed this frame) ---
@@ -144,15 +150,19 @@ class JoyTeleopNode(Node):
         rs_x = axes[self.AXIS_RIGHT_X]
         rs_y = -axes[self.AXIS_RIGHT_Y]
 
+        self.get_logger().debug(
+            f'right_stick  rs_x={rs_x:+.3f}  rs_y={rs_y:+.3f}  '
+            f'pan={self._pan_angle:.1f}°  tilt={self._tilt_angle:.1f}°')
+
         # Rate mode: stick deflection increments angle; servo holds when released.
         if abs(rs_x) > self.SERVO_DEADZONE:
             self._pan_angle += rs_x * self.SERVO_RATE
         if abs(rs_y) > self.SERVO_DEADZONE:
             self._tilt_angle += rs_y * self.SERVO_RATE
 
-        # D-pad nudge
-        dpad_x = axes[self.AXIS_DPAD_X]
-        dpad_y = axes[self.AXIS_DPAD_Y]
+        # D-pad nudge (optional — only if controller exposes dpad as axes)
+        dpad_x = axes[self.AXIS_DPAD_X] if len(axes) > self.AXIS_DPAD_X else 0.0
+        dpad_y = axes[self.AXIS_DPAD_Y] if len(axes) > self.AXIS_DPAD_Y else 0.0
         if abs(dpad_x) > 0.5:
             self._pan_angle += self.DPAD_SERVO_STEP * (1 if dpad_x > 0 else -1)
         if abs(dpad_y) > 0.5:
