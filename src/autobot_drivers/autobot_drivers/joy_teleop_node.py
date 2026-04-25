@@ -62,7 +62,7 @@ class JoyTeleopNode(Node):
     PAN_MIN, PAN_MAX = 0, 180
     TILT_MIN, TILT_MAX = 0, 100
 
-    DEADZONE = 0.12
+    DEADZONE = 0.25
     SERVO_DEADZONE = 0.20   # threshold to ignore resting-axis drift
     SERVO_RATE = 5.0     # max degrees per joy callback (rate-limited absolute)
     DPAD_SERVO_STEP = 5  # degrees per d-pad press
@@ -138,40 +138,32 @@ class JoyTeleopNode(Node):
             if abs(fwd)  < self.DEADZONE: fwd  = 0.0
             if abs(turn) < self.DEADZONE: turn = 0.0
 
-            left  = max(-255, min(255, int((fwd + turn) * self._max_speed)))
-            right = max(-255, min(255, int((fwd - turn) * self._max_speed)))
+            left  = max(-255, min(255, int((fwd - turn) * self._max_speed)))
+            right = max(-255, min(255, int((fwd + turn) * self._max_speed)))
 
             self._mcu.set_motor(YahboomMCU.MOTOR_FL, left)
             self._mcu.set_motor(YahboomMCU.MOTOR_RL, left)
             self._mcu.set_motor(YahboomMCU.MOTOR_FR, right)
             self._mcu.set_motor(YahboomMCU.MOTOR_RR, right)
 
-        # --- Servos (right stick = incremental, d-pad = nudge) -----------
-        rs_x = axes[self.AXIS_RIGHT_X]
+        # --- Servos (right stick Y = tilt only, pan fixed at center) ------
         rs_y = -axes[self.AXIS_RIGHT_Y]
 
         self.get_logger().debug(
-            f'right_stick  rs_x={rs_x:+.3f}  rs_y={rs_y:+.3f}  '
-            f'pan={self._pan_angle:.1f}°  tilt={self._tilt_angle:.1f}°')
+            f'right_stick  rs_y={rs_y:+.3f}  tilt={self._tilt_angle:.1f}°')
 
-        # Rate mode: stick deflection increments angle; servo holds when released.
-        if abs(rs_x) > self.SERVO_DEADZONE:
-            self._pan_angle += rs_x * self.SERVO_RATE
+        # Rate mode: stick deflection increments tilt; holds when released.
         if abs(rs_y) > self.SERVO_DEADZONE:
             self._tilt_angle += rs_y * self.SERVO_RATE
 
-        # D-pad nudge (optional — only if controller exposes dpad as axes)
-        dpad_x = axes[self.AXIS_DPAD_X] if len(axes) > self.AXIS_DPAD_X else 0.0
+        # D-pad nudge vertical only (optional — only if controller exposes dpad as axes)
         dpad_y = axes[self.AXIS_DPAD_Y] if len(axes) > self.AXIS_DPAD_Y else 0.0
-        if abs(dpad_x) > 0.5:
-            self._pan_angle += self.DPAD_SERVO_STEP * (1 if dpad_x > 0 else -1)
         if abs(dpad_y) > 0.5:
             self._tilt_angle += self.DPAD_SERVO_STEP * (1 if dpad_y > 0 else -1)
 
-        # Clamp and send
-        self._pan_angle  = max(self.PAN_MIN,  min(self.PAN_MAX,  self._pan_angle))
+        # Clamp and send — pan always at center
         self._tilt_angle = max(self.TILT_MIN, min(self.TILT_MAX, self._tilt_angle))
-        self._mcu.set_servo(1, int(self._pan_angle))
+        self._mcu.set_servo(1, self.PAN_CENTER)
         self._mcu.set_servo(2, int(self._tilt_angle))
 
         # --- Start → center servos ------------------------------------
