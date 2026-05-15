@@ -14,7 +14,8 @@ Drive control goes directly through /cmd_vel → motor_driver_node.
 
 import os
 import threading
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 import rclpy
 from rclpy.node import Node
@@ -35,11 +36,28 @@ class _QuietHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=_WEB_DIR, **kwargs)
 
+    def do_GET(self):
+        if urlsplit(self.path).path in ('', '/'):
+            self.path = '/teleop.html'
+        super().do_GET()
+
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-store, max-age=0')
+        super().end_headers()
+
+    def list_directory(self, path):
+        self.send_error(404, 'File not found')
+        return None
+
     def log_message(self, fmt, *args):  # silence request logs
         pass
 
     def log_error(self, fmt, *args):
         pass
+
+
+class _TeleopHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
 
 
 # ---------------------------------------------------------------------------
@@ -87,8 +105,12 @@ class WebTeleopNode(Node):
 
     # ------------------------------------------------------------------
     def _start_http_server(self, port: int) -> None:
-        server = HTTPServer(('0.0.0.0', port), _QuietHandler)
-        t = threading.Thread(target=server.serve_forever, daemon=True, name='web-teleop-http')
+        self._http_server = _TeleopHTTPServer(('0.0.0.0', port), _QuietHandler)
+        t = threading.Thread(
+            target=self._http_server.serve_forever,
+            daemon=True,
+            name='web-teleop-http',
+        )
         t.start()
 
     # ------------------------------------------------------------------

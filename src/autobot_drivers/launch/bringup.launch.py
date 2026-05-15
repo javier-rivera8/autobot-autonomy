@@ -51,7 +51,10 @@ def generate_launch_description():
             executable='rosbridge_websocket',
             name='rosbridge_websocket',
             output='screen',
-            parameters=[{'port': 9090}],
+            parameters=[{
+                'address': '0.0.0.0',
+                'port': 9090,
+            }],
         ),
 
         # ---- Bottle detector (publishes /image_annotated with bboxes) ------

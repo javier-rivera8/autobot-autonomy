@@ -2,618 +2,942 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Autobot Control</title>
-  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.1/dist/nipplejs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
-  <!-- FILE REBUILT: camera feed + ROS2 msg types fix -->
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    :root {
+      color-scheme: dark;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --bg: #07090b;
+      --panel: rgba(12, 16, 20, 0.78);
+      --panel-strong: rgba(8, 12, 16, 0.9);
+      --line: rgba(255, 255, 255, 0.16);
+      --text: #f3f6f8;
+      --muted: #9aa7b2;
+      --cyan: #18d4d8;
+      --green: #45d483;
+      --blue: #4b8dff;
+      --amber: #ffb13d;
+      --red: #ff4b55;
+      --purple: #b66cff;
+      --stick: clamp(132px, 30vw, 176px);
+      --stick-travel: calc(var(--stick) * 0.32);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-    html, body {
-      width: 100%; height: 100dvh;
-      background: #000;
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
       overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
       touch-action: none;
       user-select: none;
-      font-family: 'SF Mono', monospace;
-      color: #e0e0e0;
+      -webkit-user-select: none;
     }
 
-    /* ── Camera feed (fills screen) ─────────────────────── */
+    body {
+      height: 100vh;
+      height: 100dvh;
+      position: fixed;
+      inset: 0;
+    }
+
+    button {
+      border: 0;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
     #camera-feed {
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      inset: 0;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
-      background: #111;
+      background:
+        radial-gradient(circle at 20% 18%, rgba(24, 212, 216, 0.16), transparent 26%),
+        linear-gradient(135deg, #06080b 0%, #111820 48%, #06080b 100%);
       z-index: 0;
     }
-    #cam-offline {
+
+    #camera-feed.offline {
+      opacity: 0.22;
+    }
+
+    #camera-fallback {
       position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      color: #444;
-      font-size: 13px;
+      inset: 0;
+      display: grid;
+      place-items: center;
       z-index: 1;
       pointer-events: none;
+      color: rgba(243, 246, 248, 0.58);
+      font-size: 0.84rem;
+      letter-spacing: 0;
+      text-transform: uppercase;
     }
 
-    /* ── Overlay ─────────────────────────────────────────── */
+    #camera-fallback.hidden {
+      display: none;
+    }
+
     #overlay {
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 10;
-      pointer-events: none;
-    }
-    #overlay > * { pointer-events: all; }
-
-    /* ── Top bar ─────────────────────────────────────────── */
-    #topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 16px;
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-    }
-    #title { font-size: 14px; font-weight: 700; letter-spacing: 1px; color: #00bcd4; }
-    #status {
-      font-size: 11px;
-      padding: 4px 12px;
-      border-radius: 12px;
-      background: rgba(40,40,40,0.8);
-    }
-    #status.ok   { background: rgba(27,58,27,0.9);  color: #4caf50; }
-    #status.err  { background: rgba(58,27,27,0.9);  color: #f44336; }
-    #status.wait { background: rgba(42,42,27,0.9);  color: #ff9800; }
-
-    /* ── Speed bar ───────────────────────────────────────── */
-    #speed-bar-wrap {
-      padding: 6px 16px 4px;
-      background: rgba(0,0,0,0.45);
-    }
-    #speed-label { font-size: 9px; color: #888; margin-bottom: 3px; }
-    #speed-track {
-      height: 4px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    #speed-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #00bcd4, #4caf50);
-      border-radius: 2px;
-      transition: width 0.05s;
-    }
-
-    /* ── Centre buttons ──────────────────────────────────── */
-    #center-panel {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
+      inset: 0;
+      z-index: 2;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    #btn-stop {
-      width: 76px; height: 76px;
-      border-radius: 50%;
-      border: 2.5px solid rgba(244,67,54,0.85);
-      background: rgba(0,0,0,0.5);
-      color: #f44336;
-      font-size: 13px; font-weight: 800; letter-spacing: 1px;
-      cursor: pointer;
-      touch-action: manipulation;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-    }
-    #btn-stop:active { background: rgba(244,67,54,0.7); color: white; }
-
-    .btn-row { display: flex; gap: 8px; }
-    .btn-action {
-      padding: 8px 14px;
-      border-radius: 18px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(0,0,0,0.5);
-      color: #ccc; font-size: 13px;
-      cursor: pointer;
-      touch-action: manipulation;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-    }
-    #btn-buzzer.on { border-color: #ff9800; color: #ff9800; }
-
-    /* ── Joystick zones ──────────────────────────────────── */
-    #joystick-area {
-      position: absolute;
-      bottom: 30px; left: 0; right: 0;
-      display: flex;
-      justify-content: space-between;
-      padding: 0 24px;
-    }
-    .stick-wrap { width: 140px; height: 140px; }
-
-    .stick-label {
-      position: absolute;
-      bottom: 178px;
-      font-size: 9px;
-      color: rgba(255,255,255,0.4);
-      letter-spacing: 1px;
+      padding:
+        calc(10px + var(--safe-top))
+        calc(12px + var(--safe-right))
+        calc(14px + var(--safe-bottom))
+        calc(12px + var(--safe-left));
       pointer-events: none;
     }
-    #label-drive { left: 60px; }
-    #label-tilt  { right: 52px; }
-  </style>
-</head>
-<body>
 
-  <!-- Camera feed background -->
-  <img id="camera-feed" alt="" />
-  <div id="cam-offline">SIN SEÑAL DE CÁMARA</div>
-
-  <div id="overlay">
-
-    <div id="topbar">
-      <span id="title">AUTOBOT</span>
-      <span id="status" class="wait">Conectando…</span>
-    </div>
-
-    <div id="speed-bar-wrap">
-      <div id="speed-label">VELOCIDAD</div>
-      <div id="speed-track"><div id="speed-fill"></div></div>
-    </div>
-
-    <div id="center-panel">
-      <button id="btn-stop" ontouchstart="emergencyStop()" onclick="emergencyStop()">STOP</button>
-      <div class="btn-row">
-        <button class="btn-action" id="btn-buzzer" ontouchstart="toggleBuzzer()" onclick="toggleBuzzer()">🔔</button>
-        <button class="btn-action" ontouchstart="setLed('off')"   onclick="setLed('off')">💡</button>
-        <button class="btn-action" ontouchstart="setLed('red')"   onclick="setLed('red')">🔴</button>
-        <button class="btn-action" ontouchstart="setLed('blue')"  onclick="setLed('blue')">🔵</button>
-        <button class="btn-action" ontouchstart="setLed('green')" onclick="setLed('green')">🟢</button>
-      </div>
-    </div>
-
-    <div id="joystick-area">
-      <div class="stick-wrap" id="zone-drive"></div>
-      <div class="stick-wrap" id="zone-tilt"></div>
-    </div>
-    <span class="stick-label" id="label-drive">MANEJO</span>
-    <span class="stick-label" id="label-tilt">CÁMARA</span>
-
-  </div>
-
-  <script>
-    const WS_PORT    = 9090;
-    const CAM_PORT   = 8080;
-    const CAM_TOPIC  = '/image_raw';
-    const MAX_LINEAR = 0.6;
-    const MAX_ANGULAR= 2.5;
-    const PUB_HZ     = 10;
-
-    let vx = 0, wz = 0, tiltDelta = 0, buzzerOn = false;
-    let ros, cmdVelTopic, buzzerTopic, ledTopic, servoTiltTopic;
-
-    const $status     = document.getElementById('status');
-    const $speedFill  = document.getElementById('speed-fill');
-    const $btnBuzzer  = document.getElementById('btn-buzzer');
-    const $camFeed    = document.getElementById('camera-feed');
-    const $camOffline = document.getElementById('cam-offline');
-
-    // ── Camera (MJPEG stream) ─────────────────────────────
-    function startCamera() {
-      const url = 'http://' + location.hostname + ':' + CAM_PORT +
-                  '/stream?topic=' + encodeURIComponent(CAM_TOPIC) +
-                  '&type=ros_compressed';
-      $camFeed.src = url;
-      $camFeed.onload  = () => { $camOffline.style.display = 'none'; };
-      $camFeed.onerror = () => { $camOffline.style.display = 'block'; setTimeout(startCamera, 3000); };
+    #overlay > * {
+      pointer-events: auto;
     }
 
-    // ── ROS connection ────────────────────────────────────
-    function connect() {
-      ros = new ROSLIB.Ros({ url: 'ws://' + location.hostname + ':' + WS_PORT });
-      ros.on('connection', () => {
-        $status.textContent = 'Conectado ✓'; $status.className = 'ok';
-        setupTopics();
-      });
-      ros.on('error', () => { $status.textContent = 'Error conexión'; $status.className = 'err'; });
-      ros.on('close', () => {
-        $status.textContent = 'Reconectando…'; $status.className = 'wait';
-        vx = wz = 0; cmdVelTopic = null;
-        setTimeout(connect, 2500);
-      });
-    }
-
-    // ROS 2 rosbridge requires full type path with /msg/
-    function setupTopics() {
-      cmdVelTopic = new ROSLIB.Topic({
-        ros, name: '/cmd_vel',
-        messageType: 'geometry_msgs/msg/Twist',
-        throttle_rate: 50, queue_size: 1, latch: false,
-      });
-      buzzerTopic = new ROSLIB.Topic({
-        ros, name: '/web_teleop/buzzer',
-        messageType: 'std_msgs/msg/Bool',
-      });
-      ledTopic = new ROSLIB.Topic({
-        ros, name: '/web_teleop/led',
-        messageType: 'std_msgs/msg/String',
-      });
-      servoTiltTopic = new ROSLIB.Topic({
-        ros, name: '/web_teleop/servo_tilt',
-        messageType: 'std_msgs/msg/Float32',
-        throttle_rate: 80, queue_size: 1,
-      });
-    }
-
-    // ── Publish loop ──────────────────────────────────────
-    setInterval(() => {
-      if (!cmdVelTopic) return;
-      cmdVelTopic.publish(new ROSLIB.Message({
-        linear:  { x: vx,  y: 0.0, z: 0.0 },
-        angular: { x: 0.0, y: 0.0, z: wz  },
-      }));
-      const pct = Math.sqrt(vx*vx + (wz*0.2)*(wz*0.2)) / MAX_LINEAR * 100;
-      $speedFill.style.width = Math.min(pct, 100) + '%';
-      $speedFill.style.background = pct > 70
-        ? 'linear-gradient(90deg,#ff9800,#f44336)'
-        : 'linear-gradient(90deg,#00bcd4,#4caf50)';
-      if (tiltDelta !== 0 && servoTiltTopic)
-        servoTiltTopic.publish(new ROSLIB.Message({ data: tiltDelta }));
-    }, 1000 / PUB_HZ);
-
-    // ── Actions ───────────────────────────────────────────
-    function emergencyStop() {
-      vx = 0; wz = 0;
-      if (cmdVelTopic) cmdVelTopic.publish(new ROSLIB.Message({
-        linear: {x:0,y:0,z:0}, angular: {x:0,y:0,z:0},
-      }));
-    }
-    function toggleBuzzer() {
-      buzzerOn = !buzzerOn;
-      $btnBuzzer.classList.toggle('on', buzzerOn);
-      if (buzzerTopic) buzzerTopic.publish(new ROSLIB.Message({ data: buzzerOn }));
-    }
-    function setLed(color) {
-      if (ledTopic) ledTopic.publish(new ROSLIB.Message({ data: color }));
-    }
-
-    // ── Drive joystick (left) ─────────────────────────────
-    nipplejs.create({
-      zone: document.getElementById('zone-drive'),
-      mode: 'static', position: { left: '50%', top: '50%' },
-      size: 120, color: '#00bcd4', fadeTime: 0,
-    }).on('move', (_, d) => {
-      const f = Math.min(d.force, 1.0);
-      vx  =  Math.sin(d.angle.radian) * f * MAX_LINEAR;
-      wz  = -Math.cos(d.angle.radian) * f * MAX_ANGULAR;
-    }).on('end', () => { vx = 0; wz = 0; });
-
-    // ── Tilt joystick (right, vertical only) ─────────────
-    nipplejs.create({
-      zone: document.getElementById('zone-tilt'),
-      mode: 'static', position: { left: '50%', top: '50%' },
-      size: 100, color: '#9c27b0', fadeTime: 0,
-      lockY: true,   // vertical movement only
-    }).on('move', (_, d) => {
-      tiltDelta = Math.sin(d.angle.radian) * d.force * 4.0;
-    }).on('end', () => { tiltDelta = 0; });
-
-    startCamera();
-    connect();
-  </script>
-</body>
-</html>
-
-    /* ── Top bar ──────────────────────────────────────────── */
     #topbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-strong);
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    #brand {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 12px 18px;
-      background: #1a1a1a;
-      border-bottom: 1px solid #2a2a2a;
+      min-width: 0;
+      gap: 10px;
     }
 
-    #title { font-size: 15px; font-weight: 700; letter-spacing: 1px; color: #00bcd4; }
-
-    #status {
-      font-size: 12px;
-      padding: 4px 12px;
-      border-radius: 12px;
-      background: #2a2a2a;
-      transition: background 0.3s, color 0.3s;
+    #brand-mark {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 18px rgba(24, 212, 216, 0.9);
+      flex: 0 0 auto;
     }
-    #status.ok   { background: #1b3a1b; color: #4caf50; }
-    #status.err  { background: #3a1b1b; color: #f44336; }
-    #status.wait { background: #2a2a1b; color: #ff9800; }
 
-    /* ── Speed indicator ──────────────────────────────────── */
-    #speed-bar-wrap {
-      padding: 8px 18px 4px;
-      background: #1a1a1a;
-    }
-    #speed-label { font-size: 10px; color: #666; margin-bottom: 4px; }
-    #speed-track {
-      height: 6px;
-      background: #2a2a2a;
-      border-radius: 3px;
+    #title {
       overflow: hidden;
-    }
-    #speed-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #00bcd4, #4caf50);
-      border-radius: 3px;
-      transition: width 0.05s, background 0.2s;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.92rem;
+      font-weight: 800;
+      letter-spacing: 0;
     }
 
-    /* ── Centre buttons ───────────────────────────────────── */
-    #center-panel {
+    #status-row {
       display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 82px;
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      font-size: 0.74rem;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .status-pill.ok {
+      border-color: rgba(69, 212, 131, 0.45);
+      background: rgba(69, 212, 131, 0.12);
+      color: #8cf0b4;
+    }
+
+    .status-pill.wait {
+      border-color: rgba(255, 177, 61, 0.45);
+      background: rgba(255, 177, 61, 0.12);
+      color: #ffd28a;
+    }
+
+    .status-pill.err {
+      border-color: rgba(255, 75, 85, 0.45);
+      background: rgba(255, 75, 85, 0.14);
+      color: #ff9ca2;
+    }
+
+    #speed-wrap {
+      width: min(100%, 760px);
+      margin: 8px auto 0;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(8, 12, 16, 0.66);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    #speed-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    #speed-track {
+      width: 100%;
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.13);
+    }
+
+    #speed-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+      transition: width 90ms linear, background 160ms ease;
+    }
+
+    #center-panel {
+      position: absolute;
+      top: calc(92px + var(--safe-top));
+      left: 50%;
+      display: flex;
+      width: min(92vw, 390px);
+      transform: translateX(-50%);
       flex-direction: column;
       align-items: center;
       gap: 10px;
-      padding: 16px 0;
+      pointer-events: auto;
     }
 
     #btn-stop {
-      width: 90px;
-      height: 90px;
+      width: 76px;
+      height: 76px;
+      border: 2px solid rgba(255, 75, 85, 0.9);
       border-radius: 50%;
-      border: 3px solid #f44336;
-      background: transparent;
-      color: #f44336;
-      font-size: 15px;
-      font-weight: 800;
-      letter-spacing: 1px;
-      cursor: pointer;
-      transition: background 0.15s;
-      touch-action: manipulation;
+      background: rgba(12, 16, 20, 0.72);
+      color: #ffb3b7;
+      font-size: 0.88rem;
+      font-weight: 900;
+      letter-spacing: 0;
+      box-shadow:
+        0 0 0 8px rgba(255, 75, 85, 0.08),
+        0 14px 28px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
     }
-    #btn-stop:active { background: #f44336; color: white; }
 
-    .btn-row { display: flex; gap: 12px; }
+    #btn-stop:active {
+      background: rgba(255, 75, 85, 0.85);
+      color: #fff;
+      transform: scale(0.97);
+    }
+
+    #actions {
+      display: grid;
+      grid-template-columns: 1.35fr repeat(5, 44px);
+      gap: 8px;
+      width: 100%;
+      justify-content: center;
+    }
+
     .btn-action {
-      padding: 10px 18px;
-      border-radius: 20px;
-      border: 1.5px solid #444;
-      background: transparent;
-      color: #ccc;
-      font-size: 13px;
-      cursor: pointer;
-      touch-action: manipulation;
-      transition: background 0.15s, color 0.15s;
+      min-width: 0;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 0.78rem;
+      font-weight: 800;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
     }
-    .btn-action:active { background: #333; color: white; }
-    #btn-buzzer.on  { border-color: #ff9800; color: #ff9800; }
 
-    /* ── Joystick area ────────────────────────────────────── */
+    .btn-action:active,
+    .btn-action.active {
+      transform: translateY(1px);
+      border-color: rgba(24, 212, 216, 0.62);
+      background: rgba(24, 212, 216, 0.16);
+    }
+
+    .swatch {
+      display: grid;
+      place-items: center;
+      padding: 0;
+    }
+
+    .swatch::before {
+      content: "";
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.54);
+      background: var(--swatch, #fff);
+      box-shadow: 0 0 16px rgba(255, 255, 255, 0.2);
+    }
+
+    .swatch.off::before {
+      background: transparent;
+      box-shadow: none;
+    }
+
     #joystick-area {
       position: absolute;
-      bottom: 36px;
-      left: 0;
-      right: 0;
+      right: calc(16px + var(--safe-right));
+      bottom: calc(14px + var(--safe-bottom));
+      left: calc(16px + var(--safe-left));
       display: flex;
-      justify-content: space-around;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
       pointer-events: none;
     }
 
-    .stick-wrap {
-      width: 150px;
-      height: 150px;
-      pointer-events: all;
+    .stick-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
     }
 
-    /* ── Tilt indicator (right side) ──────────────────────── */
-    #tilt-label {
+    .stick-title {
+      min-height: 18px;
+      color: rgba(243, 246, 248, 0.68);
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+    }
+
+    .stick-wrap {
+      position: relative;
+      width: var(--stick);
+      height: var(--stick);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.12) 0 30%, transparent 31%),
+        rgba(8, 12, 16, 0.56);
+      border: 1px solid var(--line);
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+        0 18px 38px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      touch-action: none;
+    }
+
+    .stick-wrap::before,
+    .stick-wrap::after {
+      content: "";
       position: absolute;
-      bottom: 200px;
-      right: 30px;
-      font-size: 10px;
-      color: #666;
-      text-align: center;
+      background: rgba(255, 255, 255, 0.14);
+      pointer-events: none;
+    }
+
+    .stick-wrap::before {
+      top: 50%;
+      right: 18%;
+      left: 18%;
+      height: 1px;
+    }
+
+    .stick-wrap::after {
+      top: 18%;
+      bottom: 18%;
+      left: 50%;
+      width: 1px;
+    }
+
+    .stick-knob {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: calc(var(--stick) * 0.42);
+      height: calc(var(--stick) * 0.42);
+      border: 1px solid rgba(255, 255, 255, 0.34);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background:
+        radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.34), transparent 28%),
+        var(--knob, var(--cyan));
+      box-shadow:
+        0 12px 26px rgba(0, 0, 0, 0.32),
+        0 0 24px var(--knob-glow, rgba(24, 212, 216, 0.34));
+      pointer-events: none;
+      transition: transform 120ms ease;
+    }
+
+    .stick-wrap.active .stick-knob {
+      transition: none;
+    }
+
+    #zone-drive {
+      --knob: var(--cyan);
+      --knob-glow: rgba(24, 212, 216, 0.34);
+    }
+
+    #zone-tilt {
+      --knob: var(--purple);
+      --knob-glow: rgba(182, 108, 255, 0.34);
+    }
+
+    @media (orientation: portrait) {
+      :root {
+        --stick: clamp(128px, 39vw, 162px);
+      }
+
+      #topbar {
+        grid-template-columns: 1fr;
+      }
+
+      #status-row {
+        justify-content: stretch;
+      }
+
+      .status-pill {
+        flex: 1;
+        min-width: 0;
+      }
+
+      #center-panel {
+        top: 39%;
+        width: min(94vw, 420px);
+        transform: translate(-50%, -50%);
+      }
+
+      #actions {
+        grid-template-columns: 1fr repeat(5, 42px);
+      }
+
+      #joystick-area {
+        right: calc(10px + var(--safe-right));
+        bottom: calc(16px + var(--safe-bottom));
+        left: calc(10px + var(--safe-left));
+        gap: 10px;
+      }
+
+      .stick-title {
+        font-size: 0.64rem;
+      }
+    }
+
+    @media (max-height: 430px) and (orientation: landscape) {
+      :root {
+        --stick: clamp(118px, 29vh, 138px);
+      }
+
+      #overlay {
+        padding-top: calc(6px + var(--safe-top));
+        padding-bottom: calc(8px + var(--safe-bottom));
+      }
+
+      #topbar {
+        width: min(58vw, 560px);
+        padding: 8px 10px;
+      }
+
+      #speed-wrap {
+        width: min(58vw, 560px);
+        margin-top: 6px;
+        padding: 7px 10px;
+      }
+
+      #center-panel {
+        top: calc(82px + var(--safe-top));
+        width: min(48vw, 360px);
+      }
+
+      #btn-stop {
+        width: 64px;
+        height: 64px;
+        font-size: 0.78rem;
+      }
+
+      #actions {
+        grid-template-columns: 1.15fr repeat(5, 38px);
+        gap: 6px;
+      }
+
+      .btn-action {
+        height: 38px;
+        font-size: 0.72rem;
+      }
+
+      #joystick-area {
+        bottom: calc(8px + var(--safe-bottom));
+      }
     }
   </style>
 </head>
 <body>
+  <img id="camera-feed" class="offline" alt="" draggable="false" />
+  <div id="camera-fallback">Sin senal de camara</div>
 
-  <!-- Top bar -->
-  <div id="topbar">
-    <span id="title">AUTOBOT</span>
-    <span id="status" class="wait">Conectando…</span>
-  </div>
+  <main id="overlay">
+    <header id="topbar">
+      <div id="brand">
+        <span id="brand-mark" aria-hidden="true"></span>
+        <span id="title">AUTOBOT</span>
+      </div>
+      <div id="status-row">
+        <span id="ros-status" class="status-pill wait">ROS</span>
+        <span id="cam-status" class="status-pill wait">Camara</span>
+      </div>
+    </header>
 
-  <!-- Speed bar -->
-  <div id="speed-bar-wrap">
-    <div id="speed-label">VELOCIDAD</div>
-    <div id="speed-track"><div id="speed-fill"></div></div>
-  </div>
+    <section id="speed-wrap" aria-label="Velocidad">
+      <div id="speed-head">
+        <span>Velocidad</span>
+        <span id="speed-value">0%</span>
+      </div>
+      <div id="speed-track">
+        <div id="speed-fill"></div>
+      </div>
+    </section>
 
-  <!-- Centre controls -->
-  <div id="center-panel">
-    <button id="btn-stop" ontouchstart="emergencyStop()" onclick="emergencyStop()">STOP</button>
-    <div class="btn-row">
-      <button class="btn-action" id="btn-buzzer" ontouchstart="toggleBuzzer()" onclick="toggleBuzzer()">🔔 Bocina</button>
-      <button class="btn-action" id="btn-led-off" ontouchstart="setLed('off')" onclick="setLed('off')">💡 Off</button>
-      <button class="btn-action" id="btn-led-r"   ontouchstart="setLed('red')"   onclick="setLed('red')">🔴</button>
-      <button class="btn-action" id="btn-led-b"   ontouchstart="setLed('blue')"  onclick="setLed('blue')">🔵</button>
-    </div>
-  </div>
+    <section id="center-panel" aria-label="Controles principales">
+      <button id="btn-stop" type="button">STOP</button>
+      <div id="actions">
+        <button id="btn-buzzer" class="btn-action" type="button" aria-pressed="false">Bocina</button>
+        <button class="btn-action swatch off" type="button" data-led="off" aria-label="Apagar LED"></button>
+        <button class="btn-action swatch" type="button" data-led="red" aria-label="LED rojo" style="--swatch: var(--red)"></button>
+        <button class="btn-action swatch" type="button" data-led="blue" aria-label="LED azul" style="--swatch: var(--blue)"></button>
+        <button class="btn-action swatch" type="button" data-led="green" aria-label="LED verde" style="--swatch: var(--green)"></button>
+        <button class="btn-action swatch" type="button" data-led="white" aria-label="LED blanco" style="--swatch: #ffffff"></button>
+      </div>
+    </section>
 
-  <!-- Joysticks -->
-  <div id="joystick-area">
-    <!-- Left: drive -->
-    <div class="stick-wrap" id="zone-drive"></div>
-    <!-- Right: camera tilt -->
-    <div class="stick-wrap" id="zone-tilt"></div>
-  </div>
-
-  <div id="tilt-label">CÁMARA</div>
+    <section id="joystick-area" aria-label="Joysticks">
+      <div class="stick-column">
+        <div class="stick-title">Manejo</div>
+        <div id="zone-drive" class="stick-wrap" role="application" aria-label="Joystick de manejo">
+          <div id="knob-drive" class="stick-knob"></div>
+        </div>
+      </div>
+      <div class="stick-column">
+        <div class="stick-title">Camara</div>
+        <div id="zone-tilt" class="stick-wrap" role="application" aria-label="Joystick de camara">
+          <div id="knob-tilt" class="stick-knob"></div>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <script>
-    // ── Configuration ─────────────────────────────────────────────
-    const WS_PORT      = 9090;
-    const MAX_LINEAR   = 0.6;   // m/s
-    const MAX_ANGULAR  = 2.5;   // rad/s
-    const PUB_HZ       = 10;    // cmd_vel publish rate
+    (() => {
+      "use strict";
 
-    // ── State ─────────────────────────────────────────────────────
-    let vx = 0, wz = 0;
-    let tiltDelta = 0;
-    let buzzerOn = false;
-    let ros, cmdVelTopic, buzzerTopic, ledTopic, servoTiltTopic;
+      const params = new URLSearchParams(window.location.search);
+      const HOST = params.get("host") || window.location.hostname;
+      const WS_PORT = Number(params.get("ws_port") || 9090);
+      const CAM_PORT = Number(params.get("cam_port") || 8080);
+      const CAM_TOPIC = params.get("cam_topic") || "/image_raw";
+      const MAX_LINEAR = 0.6;
+      const MAX_ANGULAR = 2.5;
+      const TILT_STEP = 4.0;
+      const PUB_HZ = 10;
 
-    // ── DOM shortcuts ─────────────────────────────────────────────
-    const $status    = document.getElementById('status');
-    const $speedFill = document.getElementById('speed-fill');
-    const $btnBuzzer = document.getElementById('btn-buzzer');
+      let ws = null;
+      let reconnectTimer = null;
+      let connected = false;
+      let vx = 0;
+      let wz = 0;
+      let tiltDelta = 0;
+      let buzzerOn = false;
+      let cameraLoadTimer = null;
+      let cameraRetryTimer = null;
 
-    // ── ROS connection ────────────────────────────────────────────
-    function connect() {
-      const url = 'ws://' + location.hostname + ':' + WS_PORT;
-      ros = new ROSLIB.Ros({ url });
+      const rosStatus = document.getElementById("ros-status");
+      const camStatus = document.getElementById("cam-status");
+      const cameraFeed = document.getElementById("camera-feed");
+      const cameraFallback = document.getElementById("camera-fallback");
+      const speedFill = document.getElementById("speed-fill");
+      const speedValue = document.getElementById("speed-value");
+      const btnBuzzer = document.getElementById("btn-buzzer");
 
-      ros.on('connection', () => {
-        $status.textContent = 'Conectado ✓';
-        $status.className = 'ok';
-        setupTopics();
-      });
-
-      ros.on('error', () => {
-        $status.textContent = 'Error de conexión';
-        $status.className = 'err';
-      });
-
-      ros.on('close', () => {
-        $status.textContent = 'Reconectando…';
-        $status.className = 'wait';
-        vx = wz = 0;
-        setTimeout(connect, 2500);
-      });
-    }
-
-    function setupTopics() {
-      cmdVelTopic = new ROSLIB.Topic({
-        ros, name: '/cmd_vel',
-        messageType: 'geometry_msgs/Twist',
-        throttle_rate: 50,
-        queue_size: 1,
-        latch: false,
-      });
-
-      buzzerTopic = new ROSLIB.Topic({
-        ros, name: '/web_teleop/buzzer',
-        messageType: 'std_msgs/Bool',
-      });
-
-      ledTopic = new ROSLIB.Topic({
-        ros, name: '/web_teleop/led',
-        messageType: 'std_msgs/String',
-      });
-
-      servoTiltTopic = new ROSLIB.Topic({
-        ros, name: '/web_teleop/servo_tilt',
-        messageType: 'std_msgs/Float32',
-        throttle_rate: 80,
-        queue_size: 1,
-      });
-    }
-
-    // ── Publish loop ──────────────────────────────────────────────
-    setInterval(() => {
-      if (!cmdVelTopic) return;
-      cmdVelTopic.publish(new ROSLIB.Message({
-        linear:  { x: vx, y: 0, z: 0 },
-        angular: { x: 0,  y: 0, z: wz },
-      }));
-
-      // Speed indicator
-      const pct = Math.sqrt(vx * vx + (wz * 0.2) * (wz * 0.2)) / MAX_LINEAR * 100;
-      $speedFill.style.width = Math.min(pct, 100) + '%';
-      if (pct > 70) {
-        $speedFill.style.background = 'linear-gradient(90deg, #ff9800, #f44336)';
-      } else {
-        $speedFill.style.background = 'linear-gradient(90deg, #00bcd4, #4caf50)';
+      function hostForUrl(host) {
+        return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
       }
 
-      // Tilt
-      if (tiltDelta !== 0 && servoTiltTopic) {
-        servoTiltTopic.publish(new ROSLIB.Message({ data: tiltDelta }));
+      function setStatus(element, text, state) {
+        element.textContent = text;
+        element.className = `status-pill ${state}`;
       }
-    }, 1000 / PUB_HZ);
 
-    // ── Button actions ────────────────────────────────────────────
-    function emergencyStop() {
-      vx = 0; wz = 0;
-      if (cmdVelTopic) {
-        cmdVelTopic.publish(new ROSLIB.Message({
-          linear:  { x: 0, y: 0, z: 0 },
-          angular: { x: 0, y: 0, z: 0 },
-        }));
+      function send(packet) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        ws.send(JSON.stringify(packet));
       }
-    }
 
-    function toggleBuzzer() {
-      buzzerOn = !buzzerOn;
-      $btnBuzzer.classList.toggle('on', buzzerOn);
-      if (buzzerTopic) {
-        buzzerTopic.publish(new ROSLIB.Message({ data: buzzerOn }));
+      function advertise(topic, type) {
+        send({ op: "advertise", topic, type });
       }
-    }
 
-    function setLed(color) {
-      if (ledTopic) {
-        ledTopic.publish(new ROSLIB.Message({ data: color }));
+      function publish(topic, msg) {
+        send({ op: "publish", topic, msg });
       }
-    }
 
-    // ── Drive joystick (left) ─────────────────────────────────────
-    const driveStick = nipplejs.create({
-      zone:     document.getElementById('zone-drive'),
-      mode:     'static',
-      position: { left: '50%', top: '50%' },
-      size:     130,
-      color:    '#00bcd4',
-      fadeTime: 0,
-    });
+      function advertiseTopics() {
+        advertise("/cmd_vel", "geometry_msgs/msg/Twist");
+        advertise("/web_teleop/buzzer", "std_msgs/msg/Bool");
+        advertise("/web_teleop/led", "std_msgs/msg/String");
+        advertise("/web_teleop/servo_tilt", "std_msgs/msg/Float32");
+      }
 
-    driveStick.on('move', (_, data) => {
-      // nipplejs angle: 0° = right, 90° = up (counter-clockwise)
-      const rad   = data.angle.radian;
-      const force = Math.min(data.force, 1.0);
-      vx  =  Math.sin(rad) * force * MAX_LINEAR;
-      wz  = -Math.cos(rad) * force * MAX_ANGULAR;
-    });
+      function publishCmdVel(linear, angular) {
+        publish("/cmd_vel", {
+          linear: { x: linear, y: 0.0, z: 0.0 },
+          angular: { x: 0.0, y: 0.0, z: angular },
+        });
+      }
 
-    driveStick.on('end', () => { vx = 0; wz = 0; });
+      function updateSpeed() {
+        const pct = Math.min(
+          100,
+          Math.round((Math.hypot(vx, wz * 0.2) / MAX_LINEAR) * 100)
+        );
+        speedFill.style.width = `${pct}%`;
+        speedValue.textContent = `${pct}%`;
+        speedFill.style.background =
+          pct > 70
+            ? "linear-gradient(90deg, var(--amber), var(--red))"
+            : "linear-gradient(90deg, var(--cyan), var(--green))";
+      }
 
-    // ── Camera tilt joystick (right — vertical only) ──────────────
-    const tiltStick = nipplejs.create({
-      zone:     document.getElementById('zone-tilt'),
-      mode:     'static',
-      position: { left: '50%', top: '50%' },
-      size:     110,
-      color:    '#9c27b0',
-      fadeTime: 0,
-      lockX:    true,  // vertical movement only
-    });
+      function connect() {
+        window.clearTimeout(reconnectTimer);
+        connected = false;
+        setStatus(rosStatus, "Conectando", "wait");
 
-    tiltStick.on('move', (_, data) => {
-      tiltDelta = Math.sin(data.angle.radian) * data.force * 4.0;
-    });
-    tiltStick.on('end', () => { tiltDelta = 0; });
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const url = `${scheme}://${hostForUrl(HOST)}:${WS_PORT}`;
 
-    // ── Start ─────────────────────────────────────────────────────
-    connect();
+        try {
+          ws = new WebSocket(url);
+        } catch (error) {
+          setStatus(rosStatus, "Sin enlace", "err");
+          reconnectTimer = window.setTimeout(connect, 2500);
+          return;
+        }
+
+        ws.addEventListener("open", () => {
+          connected = true;
+          setStatus(rosStatus, "Conectado", "ok");
+          advertiseTopics();
+          publishCmdVel(0, 0);
+        });
+
+        ws.addEventListener("error", () => {
+          setStatus(rosStatus, "Error ROS", "err");
+        });
+
+        ws.addEventListener("close", () => {
+          connected = false;
+          setStatus(rosStatus, "Reconectando", "wait");
+          vx = 0;
+          wz = 0;
+          tiltDelta = 0;
+          updateSpeed();
+          reconnectTimer = window.setTimeout(connect, 2500);
+        });
+      }
+
+      function startCamera() {
+        window.clearTimeout(cameraLoadTimer);
+        window.clearTimeout(cameraRetryTimer);
+        setStatus(camStatus, "Camara", "wait");
+
+        const url = `http://${hostForUrl(HOST)}:${CAM_PORT}/stream?topic=${encodeURIComponent(CAM_TOPIC)}`;
+        cameraLoadTimer = window.setTimeout(() => {
+          cameraFeed.classList.add("offline");
+          cameraFallback.classList.remove("hidden");
+          setStatus(camStatus, "Sin camara", "err");
+        }, 3500);
+        cameraFeed.src = `${url}&t=${Date.now()}`;
+      }
+
+      function resetMotion() {
+        vx = 0;
+        wz = 0;
+        tiltDelta = 0;
+        driveJoystick.reset();
+        tiltJoystick.reset();
+        updateSpeed();
+      }
+
+      function emergencyStop() {
+        resetMotion();
+        if (connected) {
+          publishCmdVel(0, 0);
+        }
+      }
+
+      function toggleBuzzer() {
+        buzzerOn = !buzzerOn;
+        btnBuzzer.classList.toggle("active", buzzerOn);
+        btnBuzzer.setAttribute("aria-pressed", String(buzzerOn));
+        publish("/web_teleop/buzzer", { data: buzzerOn });
+      }
+
+      function setLed(color) {
+        publish("/web_teleop/led", { data: color });
+      }
+
+      function bindPress(element, handler, eventName = "pointerup") {
+        const wrapped = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          handler();
+        };
+
+        if (window.PointerEvent) {
+          element.addEventListener(eventName, wrapped);
+        } else {
+          let lastTouch = 0;
+          element.addEventListener("touchend", (event) => {
+            lastTouch = Date.now();
+            wrapped(event);
+          }, { passive: false });
+          element.addEventListener("click", (event) => {
+            if (Date.now() - lastTouch < 700) {
+              return;
+            }
+            wrapped(event);
+          });
+        }
+      }
+
+      class Joystick {
+        constructor(zone, knob, options) {
+          this.zone = zone;
+          this.knob = knob;
+          this.verticalOnly = Boolean(options.verticalOnly);
+          this.onMove = options.onMove;
+          this.onEnd = options.onEnd;
+          this.active = false;
+          this.pointerId = null;
+
+          this.start = this.start.bind(this);
+          this.move = this.move.bind(this);
+          this.end = this.end.bind(this);
+
+          if (window.PointerEvent) {
+            zone.addEventListener("pointerdown", this.start, { passive: false });
+            window.addEventListener("pointermove", this.move, { passive: false });
+            window.addEventListener("pointerup", this.end, { passive: false });
+            window.addEventListener("pointercancel", this.end, { passive: false });
+          } else {
+            zone.addEventListener("touchstart", this.start, { passive: false });
+            window.addEventListener("touchmove", this.move, { passive: false });
+            window.addEventListener("touchend", this.end, { passive: false });
+            zone.addEventListener("mousedown", this.start);
+            window.addEventListener("mousemove", this.move);
+            window.addEventListener("mouseup", this.end);
+          }
+        }
+
+        getPoint(event) {
+          if (event.changedTouches && event.changedTouches.length) {
+            return event.changedTouches[0];
+          }
+          if (event.touches && event.touches.length) {
+            return event.touches[0];
+          }
+          return event;
+        }
+
+        start(event) {
+          event.preventDefault();
+          const point = this.getPoint(event);
+          this.active = true;
+          this.pointerId = event.pointerId !== undefined ? event.pointerId : null;
+          this.zone.classList.add("active");
+          if (this.pointerId !== null && this.zone.setPointerCapture) {
+            this.zone.setPointerCapture(this.pointerId);
+          }
+          this.update(point.clientX, point.clientY);
+        }
+
+        move(event) {
+          if (!this.active) {
+            return;
+          }
+          if (this.pointerId !== null && event.pointerId !== this.pointerId) {
+            return;
+          }
+          event.preventDefault();
+          const point = this.getPoint(event);
+          this.update(point.clientX, point.clientY);
+        }
+
+        end(event) {
+          if (!this.active) {
+            return;
+          }
+          if (this.pointerId !== null && event.pointerId !== this.pointerId) {
+            return;
+          }
+          event.preventDefault();
+          this.active = false;
+          this.pointerId = null;
+          this.zone.classList.remove("active");
+          this.reset();
+          this.onEnd();
+        }
+
+        update(clientX, clientY) {
+          const rect = this.zone.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          const travel = rect.width * 0.32;
+          let dx = clientX - centerX;
+          let dy = clientY - centerY;
+
+          if (this.verticalOnly) {
+            dx = 0;
+          }
+
+          const distance = Math.hypot(dx, dy);
+          const scale = distance > travel ? travel / distance : 1;
+          const x = (dx * scale) / travel;
+          const y = -(dy * scale) / travel;
+          const cssX = x * travel;
+          const cssY = -y * travel;
+
+          this.knob.style.transform = `translate(calc(-50% + ${cssX}px), calc(-50% + ${cssY}px))`;
+          this.onMove({ x, y, force: Math.min(distance / travel, 1) });
+        }
+
+        reset() {
+          this.knob.style.transform = "translate(-50%, -50%)";
+        }
+      }
+
+      const driveJoystick = new Joystick(
+        document.getElementById("zone-drive"),
+        document.getElementById("knob-drive"),
+        {
+          onMove: ({ x, y }) => {
+            vx = y * MAX_LINEAR;
+            wz = -x * MAX_ANGULAR;
+            updateSpeed();
+          },
+          onEnd: () => {
+            vx = 0;
+            wz = 0;
+            updateSpeed();
+          },
+        }
+      );
+
+      const tiltJoystick = new Joystick(
+        document.getElementById("zone-tilt"),
+        document.getElementById("knob-tilt"),
+        {
+          verticalOnly: true,
+          onMove: ({ y }) => {
+            tiltDelta = y * TILT_STEP;
+          },
+          onEnd: () => {
+            tiltDelta = 0;
+          },
+        }
+      );
+
+      bindPress(document.getElementById("btn-stop"), emergencyStop, "pointerdown");
+      bindPress(btnBuzzer, toggleBuzzer);
+      document.querySelectorAll("[data-led]").forEach((button) => {
+        bindPress(button, () => setLed(button.dataset.led));
+      });
+
+      window.setInterval(() => {
+        if (!connected) {
+          return;
+        }
+        publishCmdVel(vx, wz);
+        if (tiltDelta !== 0) {
+          publish("/web_teleop/servo_tilt", { data: tiltDelta });
+        }
+      }, 1000 / PUB_HZ);
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          emergencyStop();
+        }
+      });
+      window.addEventListener("pagehide", emergencyStop);
+      window.addEventListener("beforeunload", emergencyStop);
+
+      cameraFeed.addEventListener("load", () => {
+        window.clearTimeout(cameraLoadTimer);
+        cameraFeed.classList.remove("offline");
+        cameraFallback.classList.add("hidden");
+        setStatus(camStatus, "Camara", "ok");
+      });
+
+      cameraFeed.addEventListener("error", () => {
+        window.clearTimeout(cameraLoadTimer);
+        cameraFeed.classList.add("offline");
+        cameraFallback.classList.remove("hidden");
+        setStatus(camStatus, "Sin camara", "err");
+        cameraRetryTimer = window.setTimeout(startCamera, 3000);
+      });
+
+      updateSpeed();
+      startCamera();
+      connect();
+    })();
   </script>
 </body>
 </html>
