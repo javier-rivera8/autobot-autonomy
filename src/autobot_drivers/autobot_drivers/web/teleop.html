@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Autobot Control</title>
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.1/dist/nipplejs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: 'SF Mono', monospace;
+      height: 100dvh;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+    }
+
+    /* ── Top bar ──────────────────────────────────────────── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    #title { font-size: 15px; font-weight: 700; letter-spacing: 1px; color: #00bcd4; }
+
+    #status {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: #2a2a2a;
+      transition: background 0.3s, color 0.3s;
+    }
+    #status.ok   { background: #1b3a1b; color: #4caf50; }
+    #status.err  { background: #3a1b1b; color: #f44336; }
+    #status.wait { background: #2a2a1b; color: #ff9800; }
+
+    /* ── Speed indicator ──────────────────────────────────── */
+    #speed-bar-wrap {
+      padding: 8px 18px 4px;
+      background: #1a1a1a;
+    }
+    #speed-label { font-size: 10px; color: #666; margin-bottom: 4px; }
+    #speed-track {
+      height: 6px;
+      background: #2a2a2a;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    #speed-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00bcd4, #4caf50);
+      border-radius: 3px;
+      transition: width 0.05s, background 0.2s;
+    }
+
+    /* ── Centre buttons ───────────────────────────────────── */
+    #center-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 0;
+    }
+
+    #btn-stop {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      border: 3px solid #f44336;
+      background: transparent;
+      color: #f44336;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: background 0.15s;
+      touch-action: manipulation;
+    }
+    #btn-stop:active { background: #f44336; color: white; }
+
+    .btn-row { display: flex; gap: 12px; }
+    .btn-action {
+      padding: 10px 18px;
+      border-radius: 20px;
+      border: 1.5px solid #444;
+      background: transparent;
+      color: #ccc;
+      font-size: 13px;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-action:active { background: #333; color: white; }
+    #btn-buzzer.on  { border-color: #ff9800; color: #ff9800; }
+
+    /* ── Joystick area ────────────────────────────────────── */
+    #joystick-area {
+      position: absolute;
+      bottom: 36px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-around;
+      pointer-events: none;
+    }
+
+    .stick-wrap {
+      width: 150px;
+      height: 150px;
+      pointer-events: all;
+    }
+
+    /* ── Tilt indicator (right side) ──────────────────────── */
+    #tilt-label {
+      position: absolute;
+      bottom: 200px;
+      right: 30px;
+      font-size: 10px;
+      color: #666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <span id="title">AUTOBOT</span>
+    <span id="status" class="wait">Conectando…</span>
+  </div>
+
+  <!-- Speed bar -->
+  <div id="speed-bar-wrap">
+    <div id="speed-label">VELOCIDAD</div>
+    <div id="speed-track"><div id="speed-fill"></div></div>
+  </div>
+
+  <!-- Centre controls -->
+  <div id="center-panel">
+    <button id="btn-stop" ontouchstart="emergencyStop()" onclick="emergencyStop()">STOP</button>
+    <div class="btn-row">
+      <button class="btn-action" id="btn-buzzer" ontouchstart="toggleBuzzer()" onclick="toggleBuzzer()">🔔 Bocina</button>
+      <button class="btn-action" id="btn-led-off" ontouchstart="setLed('off')" onclick="setLed('off')">💡 Off</button>
+      <button class="btn-action" id="btn-led-r"   ontouchstart="setLed('red')"   onclick="setLed('red')">🔴</button>
+      <button class="btn-action" id="btn-led-b"   ontouchstart="setLed('blue')"  onclick="setLed('blue')">🔵</button>
+    </div>
+  </div>
+
+  <!-- Joysticks -->
+  <div id="joystick-area">
+    <!-- Left: drive -->
+    <div class="stick-wrap" id="zone-drive"></div>
+    <!-- Right: camera tilt -->
+    <div class="stick-wrap" id="zone-tilt"></div>
+  </div>
+
+  <div id="tilt-label">CÁMARA</div>
+
+  <script>
+    // ── Configuration ─────────────────────────────────────────────
+    const WS_PORT      = 9090;
+    const MAX_LINEAR   = 0.6;   // m/s
+    const MAX_ANGULAR  = 2.5;   // rad/s
+    const PUB_HZ       = 10;    // cmd_vel publish rate
+
+    // ── State ─────────────────────────────────────────────────────
+    let vx = 0, wz = 0;
+    let tiltDelta = 0;
+    let buzzerOn = false;
+    let ros, cmdVelTopic, buzzerTopic, ledTopic, servoTiltTopic;
+
+    // ── DOM shortcuts ─────────────────────────────────────────────
+    const $status    = document.getElementById('status');
+    const $speedFill = document.getElementById('speed-fill');
+    const $btnBuzzer = document.getElementById('btn-buzzer');
+
+    // ── ROS connection ────────────────────────────────────────────
+    function connect() {
+      const url = 'ws://' + location.hostname + ':' + WS_PORT;
+      ros = new ROSLIB.Ros({ url });
+
+      ros.on('connection', () => {
+        $status.textContent = 'Conectado ✓';
+        $status.className = 'ok';
+        setupTopics();
+      });
+
+      ros.on('error', () => {
+        $status.textContent = 'Error de conexión';
+        $status.className = 'err';
+      });
+
+      ros.on('close', () => {
+        $status.textContent = 'Reconectando…';
+        $status.className = 'wait';
+        vx = wz = 0;
+        setTimeout(connect, 2500);
+      });
+    }
+
+    function setupTopics() {
+      cmdVelTopic = new ROSLIB.Topic({
+        ros, name: '/cmd_vel',
+        messageType: 'geometry_msgs/Twist',
+        throttle_rate: 50,
+        queue_size: 1,
+        latch: false,
+      });
+
+      buzzerTopic = new ROSLIB.Topic({
+        ros, name: '/web_teleop/buzzer',
+        messageType: 'std_msgs/Bool',
+      });
+
+      ledTopic = new ROSLIB.Topic({
+        ros, name: '/web_teleop/led',
+        messageType: 'std_msgs/String',
+      });
+
+      servoTiltTopic = new ROSLIB.Topic({
+        ros, name: '/web_teleop/servo_tilt',
+        messageType: 'std_msgs/Float32',
+        throttle_rate: 80,
+        queue_size: 1,
+      });
+    }
+
+    // ── Publish loop ──────────────────────────────────────────────
+    setInterval(() => {
+      if (!cmdVelTopic) return;
+      cmdVelTopic.publish(new ROSLIB.Message({
+        linear:  { x: vx, y: 0, z: 0 },
+        angular: { x: 0,  y: 0, z: wz },
+      }));
+
+      // Speed indicator
+      const pct = Math.sqrt(vx * vx + (wz * 0.2) * (wz * 0.2)) / MAX_LINEAR * 100;
+      $speedFill.style.width = Math.min(pct, 100) + '%';
+      if (pct > 70) {
+        $speedFill.style.background = 'linear-gradient(90deg, #ff9800, #f44336)';
+      } else {
+        $speedFill.style.background = 'linear-gradient(90deg, #00bcd4, #4caf50)';
+      }
+
+      // Tilt
+      if (tiltDelta !== 0 && servoTiltTopic) {
+        servoTiltTopic.publish(new ROSLIB.Message({ data: tiltDelta }));
+      }
+    }, 1000 / PUB_HZ);
+
+    // ── Button actions ────────────────────────────────────────────
+    function emergencyStop() {
+      vx = 0; wz = 0;
+      if (cmdVelTopic) {
+        cmdVelTopic.publish(new ROSLIB.Message({
+          linear:  { x: 0, y: 0, z: 0 },
+          angular: { x: 0, y: 0, z: 0 },
+        }));
+      }
+    }
+
+    function toggleBuzzer() {
+      buzzerOn = !buzzerOn;
+      $btnBuzzer.classList.toggle('on', buzzerOn);
+      if (buzzerTopic) {
+        buzzerTopic.publish(new ROSLIB.Message({ data: buzzerOn }));
+      }
+    }
+
+    function setLed(color) {
+      if (ledTopic) {
+        ledTopic.publish(new ROSLIB.Message({ data: color }));
+      }
+    }
+
+    // ── Drive joystick (left) ─────────────────────────────────────
+    const driveStick = nipplejs.create({
+      zone:     document.getElementById('zone-drive'),
+      mode:     'static',
+      position: { left: '50%', top: '50%' },
+      size:     130,
+      color:    '#00bcd4',
+      fadeTime: 0,
+    });
+
+    driveStick.on('move', (_, data) => {
+      // nipplejs angle: 0° = right, 90° = up (counter-clockwise)
+      const rad   = data.angle.radian;
+      const force = Math.min(data.force, 1.0);
+      vx  =  Math.sin(rad) * force * MAX_LINEAR;
+      wz  = -Math.cos(rad) * force * MAX_ANGULAR;
+    });
+
+    driveStick.on('end', () => { vx = 0; wz = 0; });
+
+    // ── Camera tilt joystick (right — vertical only) ──────────────
+    const tiltStick = nipplejs.create({
+      zone:     document.getElementById('zone-tilt'),
+      mode:     'static',
+      position: { left: '50%', top: '50%' },
+      size:     110,
+      color:    '#9c27b0',
+      fadeTime: 0,
+      lockX:    true,  // vertical movement only
+    });
+
+    tiltStick.on('move', (_, data) => {
+      tiltDelta = Math.sin(data.angle.radian) * data.force * 4.0;
+    });
+    tiltStick.on('end', () => { tiltDelta = 0; });
+
+    // ── Start ─────────────────────────────────────────────────────
+    connect();
+  </script>
+</body>
+</html>

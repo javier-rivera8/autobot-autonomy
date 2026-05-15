@@ -55,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-diagnostic-updater \
     ros-${ROS_DISTRO}-joy \
     ros-${ROS_DISTRO}-web-video-server \
+    ros-${ROS_DISTRO}-rosbridge-suite \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Python packages (for driver development) -----------------------------

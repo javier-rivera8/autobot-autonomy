@@ -34,6 +34,26 @@ def generate_launch_description():
             output='screen',
         ),
 
+        # ---- Web teleop (iPhone / browser control) -------------------------
+        # Opens http://<pi-ip>:8888/ — virtual joystick for /cmd_vel
+        Node(
+            package='autobot_drivers',
+            executable='web_teleop',
+            name='web_teleop',
+            output='screen',
+            parameters=[{'http_port': 8888}],
+        ),
+
+        # ---- rosbridge (WebSocket → ROS 2) --------------------------------
+        # Browser connects to ws://<pi-ip>:9090
+        Node(
+            package='rosbridge_server',
+            executable='rosbridge_websocket',
+            name='rosbridge_websocket',
+            output='screen',
+            parameters=[{'port': 9090}],
+        ),
+
         # ---- Bottle detector (publishes /image_annotated with bboxes) ------
         # Node(
         #     package='autobot_drivers',

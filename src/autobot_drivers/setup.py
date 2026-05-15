@@ -12,6 +12,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch',
             ['launch/bringup.launch.py']),
+        ('share/' + package_name + '/web',
+            ['autobot_drivers/web/teleop.html']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -25,6 +27,7 @@ setup(
             'bottle_detector = autobot_drivers.bottle_detector_node:main',
             'teleop = autobot_drivers.teleop_node:main',
             'joy_teleop = autobot_drivers.joy_teleop_node:main',
+            'web_teleop = autobot_drivers.web_teleop_node:main',
         ],
     },
 )
