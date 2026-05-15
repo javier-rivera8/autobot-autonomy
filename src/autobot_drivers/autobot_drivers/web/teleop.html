@@ -8,18 +8,310 @@
   <title>Autobot Control</title>
   <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.1/dist/nipplejs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
+  <!-- FILE REBUILT: camera feed + ROS2 msg types fix -->
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-    body {
-      background: #0d0d0d;
-      color: #e0e0e0;
-      font-family: 'SF Mono', monospace;
-      height: 100dvh;
+    html, body {
+      width: 100%; height: 100dvh;
+      background: #000;
       overflow: hidden;
       touch-action: none;
       user-select: none;
+      font-family: 'SF Mono', monospace;
+      color: #e0e0e0;
     }
+
+    /* ── Camera feed (fills screen) ─────────────────────── */
+    #camera-feed {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      background: #111;
+      z-index: 0;
+    }
+    #cam-offline {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: #444;
+      font-size: 13px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* ── Overlay ─────────────────────────────────────────── */
+    #overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #overlay > * { pointer-events: all; }
+
+    /* ── Top bar ─────────────────────────────────────────── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    #title { font-size: 14px; font-weight: 700; letter-spacing: 1px; color: #00bcd4; }
+    #status {
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: rgba(40,40,40,0.8);
+    }
+    #status.ok   { background: rgba(27,58,27,0.9);  color: #4caf50; }
+    #status.err  { background: rgba(58,27,27,0.9);  color: #f44336; }
+    #status.wait { background: rgba(42,42,27,0.9);  color: #ff9800; }
+
+    /* ── Speed bar ───────────────────────────────────────── */
+    #speed-bar-wrap {
+      padding: 6px 16px 4px;
+      background: rgba(0,0,0,0.45);
+    }
+    #speed-label { font-size: 9px; color: #888; margin-bottom: 3px; }
+    #speed-track {
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #speed-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00bcd4, #4caf50);
+      border-radius: 2px;
+      transition: width 0.05s;
+    }
+
+    /* ── Centre buttons ──────────────────────────────────── */
+    #center-panel {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #btn-stop {
+      width: 76px; height: 76px;
+      border-radius: 50%;
+      border: 2.5px solid rgba(244,67,54,0.85);
+      background: rgba(0,0,0,0.5);
+      color: #f44336;
+      font-size: 13px; font-weight: 800; letter-spacing: 1px;
+      cursor: pointer;
+      touch-action: manipulation;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+    #btn-stop:active { background: rgba(244,67,54,0.7); color: white; }
+
+    .btn-row { display: flex; gap: 8px; }
+    .btn-action {
+      padding: 8px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.5);
+      color: #ccc; font-size: 13px;
+      cursor: pointer;
+      touch-action: manipulation;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+    #btn-buzzer.on { border-color: #ff9800; color: #ff9800; }
+
+    /* ── Joystick zones ──────────────────────────────────── */
+    #joystick-area {
+      position: absolute;
+      bottom: 30px; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+    .stick-wrap { width: 140px; height: 140px; }
+
+    .stick-label {
+      position: absolute;
+      bottom: 178px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 1px;
+      pointer-events: none;
+    }
+    #label-drive { left: 60px; }
+    #label-tilt  { right: 52px; }
+  </style>
+</head>
+<body>
+
+  <!-- Camera feed background -->
+  <img id="camera-feed" alt="" />
+  <div id="cam-offline">SIN SEÑAL DE CÁMARA</div>
+
+  <div id="overlay">
+
+    <div id="topbar">
+      <span id="title">AUTOBOT</span>
+      <span id="status" class="wait">Conectando…</span>
+    </div>
+
+    <div id="speed-bar-wrap">
+      <div id="speed-label">VELOCIDAD</div>
+      <div id="speed-track"><div id="speed-fill"></div></div>
+    </div>
+
+    <div id="center-panel">
+      <button id="btn-stop" ontouchstart="emergencyStop()" onclick="emergencyStop()">STOP</button>
+      <div class="btn-row">
+        <button class="btn-action" id="btn-buzzer" ontouchstart="toggleBuzzer()" onclick="toggleBuzzer()">🔔</button>
+        <button class="btn-action" ontouchstart="setLed('off')"   onclick="setLed('off')">💡</button>
+        <button class="btn-action" ontouchstart="setLed('red')"   onclick="setLed('red')">🔴</button>
+        <button class="btn-action" ontouchstart="setLed('blue')"  onclick="setLed('blue')">🔵</button>
+        <button class="btn-action" ontouchstart="setLed('green')" onclick="setLed('green')">🟢</button>
+      </div>
+    </div>
+
+    <div id="joystick-area">
+      <div class="stick-wrap" id="zone-drive"></div>
+      <div class="stick-wrap" id="zone-tilt"></div>
+    </div>
+    <span class="stick-label" id="label-drive">MANEJO</span>
+    <span class="stick-label" id="label-tilt">CÁMARA</span>
+
+  </div>
+
+  <script>
+    const WS_PORT    = 9090;
+    const CAM_PORT   = 8080;
+    const CAM_TOPIC  = '/image_raw';
+    const MAX_LINEAR = 0.6;
+    const MAX_ANGULAR= 2.5;
+    const PUB_HZ     = 10;
+
+    let vx = 0, wz = 0, tiltDelta = 0, buzzerOn = false;
+    let ros, cmdVelTopic, buzzerTopic, ledTopic, servoTiltTopic;
+
+    const $status     = document.getElementById('status');
+    const $speedFill  = document.getElementById('speed-fill');
+    const $btnBuzzer  = document.getElementById('btn-buzzer');
+    const $camFeed    = document.getElementById('camera-feed');
+    const $camOffline = document.getElementById('cam-offline');
+
+    // ── Camera (MJPEG stream) ─────────────────────────────
+    function startCamera() {
+      const url = 'http://' + location.hostname + ':' + CAM_PORT +
+                  '/stream?topic=' + encodeURIComponent(CAM_TOPIC) +
+                  '&type=ros_compressed';
+      $camFeed.src = url;
+      $camFeed.onload  = () => { $camOffline.style.display = 'none'; };
+      $camFeed.onerror = () => { $camOffline.style.display = 'block'; setTimeout(startCamera, 3000); };
+    }
+
+    // ── ROS connection ────────────────────────────────────
+    function connect() {
+      ros = new ROSLIB.Ros({ url: 'ws://' + location.hostname + ':' + WS_PORT });
+      ros.on('connection', () => {
+        $status.textContent = 'Conectado ✓'; $status.className = 'ok';
+        setupTopics();
+      });
+      ros.on('error', () => { $status.textContent = 'Error conexión'; $status.className = 'err'; });
+      ros.on('close', () => {
+        $status.textContent = 'Reconectando…'; $status.className = 'wait';
+        vx = wz = 0; cmdVelTopic = null;
+        setTimeout(connect, 2500);
+      });
+    }
+
+    // ROS 2 rosbridge requires full type path with /msg/
+    function setupTopics() {
+      cmdVelTopic = new ROSLIB.Topic({
+        ros, name: '/cmd_vel',
+        messageType: 'geometry_msgs/msg/Twist',
+        throttle_rate: 50, queue_size: 1, latch: false,
+      });
+      buzzerTopic = new ROSLIB.Topic({
+        ros, name: '/web_teleop/buzzer',
+        messageType: 'std_msgs/msg/Bool',
+      });
+      ledTopic = new ROSLIB.Topic({
+        ros, name: '/web_teleop/led',
+        messageType: 'std_msgs/msg/String',
+      });
+      servoTiltTopic = new ROSLIB.Topic({
+        ros, name: '/web_teleop/servo_tilt',
+        messageType: 'std_msgs/msg/Float32',
+        throttle_rate: 80, queue_size: 1,
+      });
+    }
+
+    // ── Publish loop ──────────────────────────────────────
+    setInterval(() => {
+      if (!cmdVelTopic) return;
+      cmdVelTopic.publish(new ROSLIB.Message({
+        linear:  { x: vx,  y: 0.0, z: 0.0 },
+        angular: { x: 0.0, y: 0.0, z: wz  },
+      }));
+      const pct = Math.sqrt(vx*vx + (wz*0.2)*(wz*0.2)) / MAX_LINEAR * 100;
+      $speedFill.style.width = Math.min(pct, 100) + '%';
+      $speedFill.style.background = pct > 70
+        ? 'linear-gradient(90deg,#ff9800,#f44336)'
+        : 'linear-gradient(90deg,#00bcd4,#4caf50)';
+      if (tiltDelta !== 0 && servoTiltTopic)
+        servoTiltTopic.publish(new ROSLIB.Message({ data: tiltDelta }));
+    }, 1000 / PUB_HZ);
+
+    // ── Actions ───────────────────────────────────────────
+    function emergencyStop() {
+      vx = 0; wz = 0;
+      if (cmdVelTopic) cmdVelTopic.publish(new ROSLIB.Message({
+        linear: {x:0,y:0,z:0}, angular: {x:0,y:0,z:0},
+      }));
+    }
+    function toggleBuzzer() {
+      buzzerOn = !buzzerOn;
+      $btnBuzzer.classList.toggle('on', buzzerOn);
+      if (buzzerTopic) buzzerTopic.publish(new ROSLIB.Message({ data: buzzerOn }));
+    }
+    function setLed(color) {
+      if (ledTopic) ledTopic.publish(new ROSLIB.Message({ data: color }));
+    }
+
+    // ── Drive joystick (left) ─────────────────────────────
+    nipplejs.create({
+      zone: document.getElementById('zone-drive'),
+      mode: 'static', position: { left: '50%', top: '50%' },
+      size: 120, color: '#00bcd4', fadeTime: 0,
+    }).on('move', (_, d) => {
+      const f = Math.min(d.force, 1.0);
+      vx  =  Math.sin(d.angle.radian) * f * MAX_LINEAR;
+      wz  = -Math.cos(d.angle.radian) * f * MAX_ANGULAR;
+    }).on('end', () => { vx = 0; wz = 0; });
+
+    // ── Tilt joystick (right, vertical only) ─────────────
+    nipplejs.create({
+      zone: document.getElementById('zone-tilt'),
+      mode: 'static', position: { left: '50%', top: '50%' },
+      size: 100, color: '#9c27b0', fadeTime: 0,
+      lockY: true,   // vertical movement only
+    }).on('move', (_, d) => {
+      tiltDelta = Math.sin(d.angle.radian) * d.force * 4.0;
+    }).on('end', () => { tiltDelta = 0; });
+
+    startCamera();
+    connect();
+  </script>
+</body>
+</html>
 
     /* ── Top bar ──────────────────────────────────────────── */
     #topbar {
