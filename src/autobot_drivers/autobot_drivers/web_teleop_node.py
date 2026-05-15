@@ -103,7 +103,7 @@ class WebTeleopNode(Node):
             self.get_logger().warn(f'Unknown LED colour: {colour!r}')
             return
         if self._mcu:
-            self._mcu.set_colorful_lamps(0xFF, *rgb)  # 0xFF = all LEDs
+            self._mcu.led_rgb_all(*rgb)
 
     def _servo_tilt_cb(self, msg: Float32) -> None:
         self._tilt = max(self.TILT_MIN,
