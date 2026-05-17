@@ -3,7 +3,7 @@
 bottle_hunt_mission_node.py
 ---------------------------
 Autonomous mission:
-  1. Rotate until a bottle is detected.
+  1. Rotate in short scan steps until a bottle is detected.
   2. Center the bottle in the camera image.
   3. Approach while centered.
   4. Stop when the bottle is close enough by image size or ultrasonic range.
@@ -42,14 +42,16 @@ class BottleHuntMissionNode(Node):
         self.declare_parameter('target_topic', '/bottle_target')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('control_hz', 10.0)
-        self.declare_parameter('search_angular_speed', 0.45)
+        self.declare_parameter('search_angular_speed', 0.35)
+        self.declare_parameter('search_rotate_seconds', 0.45)
+        self.declare_parameter('search_pause_seconds', 1.35)
         self.declare_parameter('max_linear_speed', 0.18)
         self.declare_parameter('max_angular_speed', 0.90)
         self.declare_parameter('angular_kp', 1.60)
         self.declare_parameter('center_tolerance', 0.08)
         self.declare_parameter('desired_area', 0.16)
         self.declare_parameter('slow_area', 0.06)
-        self.declare_parameter('lost_timeout', 0.80)
+        self.declare_parameter('lost_timeout', 1.50)
         self.declare_parameter('use_ultrasonic', True)
         self.declare_parameter('ultrasonic_hz', 5.0)
         self.declare_parameter('stop_distance_m', 0.28)
@@ -62,6 +64,10 @@ class BottleHuntMissionNode(Node):
         self._control_hz = float(self.get_parameter('control_hz').value)
         self._search_wz = float(
             self.get_parameter('search_angular_speed').value)
+        self._search_rotate_seconds = float(
+            self.get_parameter('search_rotate_seconds').value)
+        self._search_pause_seconds = float(
+            self.get_parameter('search_pause_seconds').value)
         self._max_vx = float(self.get_parameter('max_linear_speed').value)
         self._max_wz = float(self.get_parameter('max_angular_speed').value)
         self._angular_kp = float(self.get_parameter('angular_kp').value)
@@ -91,6 +97,8 @@ class BottleHuntMissionNode(Node):
         self._target_area = 0.0
         self._target_confidence = 0.0
         self._found_announced = False
+        self._search_paused = True
+        self._search_phase_started = self._now()
 
         self._mcu = None
         if self._use_ultrasonic:
@@ -151,8 +159,10 @@ class BottleHuntMissionNode(Node):
             return
 
         if not target_visible:
+            if self._state is not MissionState.SEARCHING:
+                self._reset_search_cycle(now)
             self._set_state(MissionState.SEARCHING)
-            self._publish_cmd(0.0, self._search_wz)
+            self._publish_search_cmd(now)
             return
 
         self._set_state(MissionState.TRACKING)
@@ -168,6 +178,33 @@ class BottleHuntMissionNode(Node):
             linear = self._limit_speed_from_ultrasonic(linear)
 
         self._publish_cmd(linear, angular)
+
+    def _publish_search_cmd(self, now: float) -> None:
+        elapsed = now - self._search_phase_started
+
+        if self._search_paused:
+            if elapsed >= self._search_pause_seconds:
+                self._search_paused = False
+                self._search_phase_started = now
+                self.get_logger().debug('Search scan: rotating')
+                self._publish_cmd(0.0, self._search_wz)
+                return
+
+            self._publish_stop()
+            return
+
+        if elapsed >= self._search_rotate_seconds:
+            self._search_paused = True
+            self._search_phase_started = now
+            self.get_logger().debug('Search scan: pausing for detector')
+            self._publish_stop()
+            return
+
+        self._publish_cmd(0.0, self._search_wz)
+
+    def _reset_search_cycle(self, now: float) -> None:
+        self._search_paused = True
+        self._search_phase_started = now
 
     def _approach_speed_from_image(self) -> float:
         if self._target_area >= self._desired_area:
