@@ -66,7 +66,7 @@ class _TeleopHTTPServer(ThreadingHTTPServer):
 class WebTeleopNode(Node):
 
     TILT_MIN, TILT_MAX = 0, 100
-    TILT_CENTER = 40
+    TILT_CENTER = 25
 
     _LED_MAP = {
         'red':    (255, 0, 0),
