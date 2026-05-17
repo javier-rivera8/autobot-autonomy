@@ -15,6 +15,8 @@ Requires:
 Topics:
   Subscribed : /image_raw         (sensor_msgs/Image)
   Published  : /bottle_detected   (std_msgs/Bool)
+               /bottle_target     (std_msgs/Float32MultiArray)
+                   [visible, center_x, center_y, area, confidence]
                /image_annotated   (sensor_msgs/Image)  ← bounding boxes
 """
 
@@ -25,7 +27,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32MultiArray
 from cv_bridge import CvBridge
 
 from autobot_drivers.yahboom_mcu import YahboomMCU
@@ -69,6 +71,8 @@ class BottleDetectorNode(Node):
             qos_profile_sensor_data)
 
         self._pub = self.create_publisher(Bool, '/bottle_detected', 10)
+        self._target_pub = self.create_publisher(
+            Float32MultiArray, '/bottle_target', 10)
         self._img_pub = self.create_publisher(Image, '/image_annotated', 10)
 
         self.get_logger().info('bottle_detector node ready  '
@@ -78,6 +82,8 @@ class BottleDetectorNode(Node):
     # ------------------------------------------------------------------
     def _image_cb(self, msg: Image) -> None:
         frame = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        frame_h, frame_w = frame.shape[:2]
+        frame_area = max(1, frame_w * frame_h)
 
         results = self._model.predict(
             frame, imgsz=self._imgsz, conf=self._conf,
@@ -85,6 +91,8 @@ class BottleDetectorNode(Node):
 
         found = False
         best_conf = 0.0
+        best_target = [0.0, 0.0, 0.0, 0.0, 0.0]
+        best_area = 0.0
         for r in results:
             for box in r.boxes:
                 conf = float(box.conf[0])
@@ -93,6 +101,18 @@ class BottleDetectorNode(Node):
                     found = True
                 # Draw bounding box on frame
                 x1, y1, x2, y2 = (int(v) for v in box.xyxy[0])
+                box_w = max(0, x2 - x1)
+                box_h = max(0, y2 - y1)
+                area = (box_w * box_h) / frame_area
+                if area > best_area:
+                    best_area = area
+                    best_target = [
+                        1.0,
+                        ((x1 + x2) / 2.0) / frame_w,
+                        ((y1 + y2) / 2.0) / frame_h,
+                        area,
+                        conf,
+                    ]
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f'bottle {conf:.0%}',
                             (x1, max(y1 - 8, 0)),
@@ -107,6 +127,10 @@ class BottleDetectorNode(Node):
         det_msg = Bool()
         det_msg.data = found
         self._pub.publish(det_msg)
+
+        target_msg = Float32MultiArray()
+        target_msg.data = best_target
+        self._target_pub.publish(target_msg)
 
         # Update LED only on state change
         if found != self._bottle_visible:
