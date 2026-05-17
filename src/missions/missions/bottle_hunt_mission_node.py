@@ -58,6 +58,7 @@ class BottleHuntMissionNode(Node):
         self.declare_parameter('slow_distance_m', 0.55)
         self.declare_parameter('min_valid_distance_m', 0.03)
         self.declare_parameter('max_valid_distance_m', 4.00)
+        self.declare_parameter('camera_tilt_start', 25)
 
         self._target_topic = self.get_parameter('target_topic').value
         self._cmd_vel_topic = self.get_parameter('cmd_vel_topic').value
@@ -88,6 +89,8 @@ class BottleHuntMissionNode(Node):
             self.get_parameter('min_valid_distance_m').value)
         self._max_valid_distance = float(
             self.get_parameter('max_valid_distance_m').value)
+        self._camera_tilt_start = int(
+            self.get_parameter('camera_tilt_start').value)
 
         self._state = MissionState.SEARCHING
         self._last_target_time = -math.inf
@@ -101,15 +104,17 @@ class BottleHuntMissionNode(Node):
         self._search_phase_started = self._now()
 
         self._mcu = None
-        if self._use_ultrasonic:
+        if self._use_ultrasonic or self._camera_tilt_start >= 0:
             try:
                 self._mcu = YahboomMCU()
-                self._mcu.ultrasound_switch(1)
-                self.get_logger().info('Ultrasonic sensor enabled')
+                self._set_starting_camera_tilt()
+                if self._use_ultrasonic:
+                    self._mcu.ultrasound_switch(1)
+                    self.get_logger().info('Ultrasonic sensor enabled')
             except Exception as exc:
                 self._mcu = None
                 self.get_logger().warn(
-                    f'Ultrasonic unavailable: {exc}; using camera only')
+                    f'MCU unavailable: {exc}; using camera detection only')
 
         self._cmd_pub = self.create_publisher(Twist, self._cmd_vel_topic, 10)
         self._target_sub = self.create_subscription(
@@ -137,6 +142,11 @@ class BottleHuntMissionNode(Node):
         self._target_area = max(0.0, float(area))
         self._target_confidence = max(0.0, float(confidence))
         self._last_target_time = self._now()
+
+    def _set_starting_camera_tilt(self) -> None:
+        tilt = max(0, min(100, self._camera_tilt_start))
+        self._mcu.set_servo(2, tilt)
+        self.get_logger().info(f'Starting camera tilt set to {tilt}')
 
     def _control_cb(self) -> None:
         now = self._now()

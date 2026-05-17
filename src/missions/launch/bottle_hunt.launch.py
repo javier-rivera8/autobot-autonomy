@@ -14,6 +14,7 @@ def generate_launch_description():
     search_pause_seconds = LaunchConfiguration('search_pause_seconds')
     max_linear_speed = LaunchConfiguration('max_linear_speed')
     max_angular_speed = LaunchConfiguration('max_angular_speed')
+    camera_tilt_start = LaunchConfiguration('camera_tilt_start')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -50,6 +51,11 @@ def generate_launch_description():
             'max_angular_speed',
             default_value='2.00',
             description='Maximum turn speed while tracking the bottle',
+        ),
+        DeclareLaunchArgument(
+            'camera_tilt_start',
+            default_value='25',
+            description='Tilt servo angle to set when the mission starts',
         ),
 
         Node(
@@ -93,6 +99,10 @@ def generate_launch_description():
                 'max_angular_speed': ParameterValue(
                     max_angular_speed,
                     value_type=float,
+                ),
+                'camera_tilt_start': ParameterValue(
+                    camera_tilt_start,
+                    value_type=int,
                 ),
             }],
         ),
