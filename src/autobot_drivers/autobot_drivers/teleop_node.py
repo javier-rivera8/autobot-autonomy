@@ -104,7 +104,7 @@ class TeleopNode(Node):
     SERVO_STEP     = 5
     RGB_STEP       = 30
     PAN_CENTER     = 90
-    TILT_CENTER    = 50
+    TILT_CENTER    = 40
     PAN_MIN, PAN_MAX   = 0, 180
     TILT_MIN, TILT_MAX = 0, 100
 

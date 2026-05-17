@@ -66,7 +66,7 @@ class _TeleopHTTPServer(ThreadingHTTPServer):
 class WebTeleopNode(Node):
 
     TILT_MIN, TILT_MAX = 0, 100
-    TILT_CENTER = 50
+    TILT_CENTER = 40
 
     _LED_MAP = {
         'red':    (255, 0, 0),
@@ -91,6 +91,8 @@ class WebTeleopNode(Node):
             self.get_logger().warn(f'YahboomMCU unavailable: {e} — running without hardware')
 
         self._tilt = self.TILT_CENTER
+        if self._mcu:
+            self._mcu.set_servo(2, int(self._tilt))
 
         # Subscriptions
         self.create_subscription(Bool,    '/web_teleop/buzzer',     self._buzzer_cb,     10)
