@@ -698,7 +698,7 @@
         window.clearTimeout(cameraRetryTimer);
         setStatus(camStatus, "Camara", "wait");
 
-        const url = `http://${hostForUrl(HOST)}:${CAM_PORT}/stream?topic=${encodeURIComponent(CAM_TOPIC)}`;
+        const url = `http://${hostForUrl(HOST)}:${CAM_PORT}/stream?topic=${CAM_TOPIC}`;
         cameraLoadTimer = window.setTimeout(() => {
           cameraFeed.classList.add("offline");
           cameraFallback.classList.remove("hidden");
