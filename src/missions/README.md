@@ -29,7 +29,7 @@ ros2 launch missions bottle_hunt.launch.py
 For slow camera/detector rates, tune the scan pattern:
 
 ```bash
-ros2 launch missions bottle_hunt.launch.py search_rotate_seconds:=0.45 search_pause_seconds:=1.35 search_angular_speed:=0.35
+ros2 launch missions bottle_hunt.launch.py search_rotate_seconds:=0.45 search_pause_seconds:=1.35 search_angular_speed:=2.00 max_linear_speed:=0.35
 ```
 
 If a detector is already running:

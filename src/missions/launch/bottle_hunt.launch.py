@@ -12,6 +12,8 @@ def generate_launch_description():
     search_angular_speed = LaunchConfiguration('search_angular_speed')
     search_rotate_seconds = LaunchConfiguration('search_rotate_seconds')
     search_pause_seconds = LaunchConfiguration('search_pause_seconds')
+    max_linear_speed = LaunchConfiguration('max_linear_speed')
+    max_angular_speed = LaunchConfiguration('max_angular_speed')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -26,7 +28,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'search_angular_speed',
-            default_value='0.35',
+            default_value='2.00',
             description='Angular speed while scanning for the bottle',
         ),
         DeclareLaunchArgument(
@@ -38,6 +40,16 @@ def generate_launch_description():
             'search_pause_seconds',
             default_value='1.35',
             description='Seconds to wait still for detector frames',
+        ),
+        DeclareLaunchArgument(
+            'max_linear_speed',
+            default_value='0.35',
+            description='Maximum forward speed while approaching the bottle',
+        ),
+        DeclareLaunchArgument(
+            'max_angular_speed',
+            default_value='2.00',
+            description='Maximum turn speed while tracking the bottle',
         ),
 
         Node(
@@ -72,6 +84,14 @@ def generate_launch_description():
                 ),
                 'search_pause_seconds': ParameterValue(
                     search_pause_seconds,
+                    value_type=float,
+                ),
+                'max_linear_speed': ParameterValue(
+                    max_linear_speed,
+                    value_type=float,
+                ),
+                'max_angular_speed': ParameterValue(
+                    max_angular_speed,
                     value_type=float,
                 ),
             }],
